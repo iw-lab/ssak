@@ -182,3 +182,15 @@ CREATE TABLE IF NOT EXISTS auto_schedules (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_auto_schedule_class ON auto_schedules(class_code);
+
+-- 2026-10-13 무료 읽기 한도(DO/D1 하루 500만 행) 대응 — 색인 없는 WHERE/ORDER BY/DELETE 가 표 전체를 훑던 자리.
+-- (check-db-reads.mjs FAIL 10건 수정, 색인만 추가)
+CREATE INDEX IF NOT EXISTS idx_users_role_created ON users(role, created_at);
+CREATE INDEX IF NOT EXISTS idx_users_class_role ON users(class_code, role);
+-- classes.teacher_id FK(users 참조) — 교사 삭제 시 FK 검사가 classes 전체를 훑던 자리
+CREATE INDEX IF NOT EXISTS idx_classes_teacher_created ON classes(teacher_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_error_user_count ON error_patterns(user_id, count DESC);
+CREATE INDEX IF NOT EXISTS idx_writings_draft ON writings(is_draft);
+CREATE INDEX IF NOT EXISTS idx_writings_student_draft_created ON writings(student_id, is_draft, created_at);
+CREATE INDEX IF NOT EXISTS idx_writings_class_draft_created ON writings(class_code, is_draft, created_at);
+CREATE INDEX IF NOT EXISTS idx_writings_student_draft_submitted ON writings(student_id, is_draft, submitted_at);

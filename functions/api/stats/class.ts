@@ -49,6 +49,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // Common errors across class
     const { results: classErrors } = await context.env.DB.prepare(
+      // gb-scan-ok: users→error_patterns 둘 다 색인(class_code / user_id) SEARCH로 진입 — 정렬·그룹은 한 학급 학생 수(수십 행)만 모은 뒤라 표 크기와 무관
       `SELECT pattern_type, SUM(count) as total_count, COUNT(DISTINCT user_id) as student_count
        FROM error_patterns ep
        JOIN users u ON ep.user_id = u.id
