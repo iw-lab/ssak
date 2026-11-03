@@ -12,7 +12,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
               score_total, score_content, score_organization, score_expression, score_mechanics,
               submitted_at
        FROM writings WHERE student_id = ? AND is_draft = 0
-       ORDER BY submitted_at DESC LIMIT 100`,
+       ORDER BY submitted_at DESC LIMIT 100 /* gb-cost-ok 한 학생 글 · idx_writings_student_draft_submitted 색인 = 돌려준 행만 */`,
     )
       .bind(userId)
       .all();
