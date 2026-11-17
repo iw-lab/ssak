@@ -1,3 +1,4 @@
+import MaskPreviewModal from "../components/MaskPreviewModal";
 import {
   useState,
   useEffect,
@@ -81,6 +82,7 @@ const AvatarShop = lazy(() => import("../components/shop/AvatarShop"));
 
 export default function StudentDashboard({ user, userData }) {
   const [classInfo, setClassInfo] = useState(null);
+  const [maskPreview, setMaskPreview] = useState(null); // { text, resolve } — 제출 전 가림 미리보기(국외 AI 로 가기 전)
   const [activeTab, setActiveTab] = useState("write");
   const [writings, setWritings] = useState([]);
   const [stats, setStats] = useState(null);
@@ -1439,7 +1441,10 @@ export default function StudentDashboard({ user, userData }) {
       }
     }
 
-    if (!confirm("글을 제출하시겠습니까? 제출 후 AI가 분석합니다.")) return;
+    // 🔒 제출 전 미리보기 — AI(국외)로 갈 글을 이름·주소 가린 모습으로 보여 주고, 더 가릴 낱말을 고르게 한다
+    const maskWords = await new Promise((resolve) => setMaskPreview({ text: currentWriting.content, resolve }));
+    setMaskPreview(null);
+    if (maskWords === null) return;
 
     setIsSubmitting(true);
     try {
@@ -1471,6 +1476,7 @@ export default function StudentDashboard({ user, userData }) {
       const writingDataWithPrevScore = {
         ...currentWriting,
         previousScore: previousScoreForRewrite,
+        maskWords,
       };
 
       const result = await submitWriting(
@@ -1883,6 +1889,9 @@ export default function StudentDashboard({ user, userData }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
+      {maskPreview && (
+        <MaskPreviewModal text={maskPreview.text} onConfirm={(w) => maskPreview.resolve(w)} onCancel={() => maskPreview.resolve(null)} />
+      )}
       {showConfetti && (
         <Suspense fallback={null}>
           <Confetti />

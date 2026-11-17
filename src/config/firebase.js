@@ -14,8 +14,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const functions = getFunctions(app, "us-central1");
+// 2026-11-17 싹 되살리기: 데이터는 서울(asia-northeast3) DB «seoul» — 종전 (default)는 미국(nam5)
+export const db = getFirestore(app, "seoul");
+export const functions = getFunctions(app, "asia-northeast3");
 
 // Connect to emulators in development (disabled for production testing)
 // if (import.meta.env.DEV) {

@@ -10,6 +10,7 @@ export async function analyzeWriting(
   isRewrite = false,
   previousScore = null,
   previousText = null,
+  maskWords = [],
 ) {
   try {
     const analyzeWritingFn = httpsCallable(functions, "analyzeWriting");
@@ -22,6 +23,7 @@ export async function analyzeWriting(
       isRewrite,
       previousScore,
       previousText,
+      maskWords,
     });
     return result.data;
   } catch (error) {

@@ -148,7 +148,7 @@ export default function PrivacyConsent({ onConsent, userName }) {
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 mt-1">
-                  작성한 글이 AI(OpenAI)로 전송되어 평가됩니다.
+                  작성한 글이 이름·주소·학교·전화번호를 «ㅇㅇㅇ»로 가린 뒤 AI(Anthropic Claude)로 전송되어 평가됩니다.
                 </p>
                 <button
                   type="button"
@@ -169,7 +169,7 @@ export default function PrivacyConsent({ onConsent, userName }) {
                     1. AI 처리 내용
                   </h4>
                   <ul className="list-disc ml-5 mt-1 space-y-1">
-                    <li>작성한 글 내용 (이름, 학번 등 개인식별정보 제외)</li>
+                    <li>작성한 글 내용 — 보내기 전에 이름·주소·학교·전화번호·이메일을 자동으로 «ㅇㅇㅇ»로 가리고, 학생이 미리보기에서 더 가릴 수 있음</li>
                     <li>학년 정보 (적절한 평가 기준 적용을 위함)</li>
                     <li>글쓰기 주제</li>
                   </ul>
@@ -178,10 +178,9 @@ export default function PrivacyConsent({ onConsent, userName }) {
                   <h4 className="font-semibold text-gray-900">
                     2. AI 서비스 제공자
                   </h4>
-                  <p className="mt-1">OpenAI, Inc. - 미국 소재</p>
+                  <p className="mt-1">Anthropic, PBC (Claude API) — 미국</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    OpenAI의 개인정보처리방침:
-                    https://openai.com/policies/privacy-policy
+                    Anthropic 개인정보 안내: https://privacy.claude.com
                   </p>
                 </div>
                 <div>
@@ -194,10 +193,11 @@ export default function PrivacyConsent({ onConsent, userName }) {
                     </li>
                     <li>글 내용만 익명화되어 전송</li>
                     <li>
-                      OpenAI는 API를 통해 전송된 데이터를 AI 모델 학습에
-                      사용하지 않음 (API 정책)
+                      Anthropic은 API로 받은 입력·출력을 기본적으로 모델 학습에
+                      사용하지 않음 (Anthropic 상업 약관·개인정보 안내)
                     </li>
-                    <li>전송 데이터는 평가 후 30일 이내 삭제 (OpenAI 정책)</li>
+                    <li>전송 데이터는 받은 날로부터 30일 이내 자동 삭제 (Anthropic 정책 — 이용정책 위반 의심 등 예외 있음)</li>
+                    <li>학생 글 원본은 서울(대한민국) 리전 데이터베이스에 저장</li>
                   </ul>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">

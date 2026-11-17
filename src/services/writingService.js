@@ -427,6 +427,7 @@ export async function submitWriting(
       isRewrite,
       previousScore,
       previousText,
+      writingData.maskWords || [],
     );
 
     // 5. 제출 (기준 점수 체크 제거 - 모든 점수 허용)

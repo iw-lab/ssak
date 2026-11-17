@@ -1,46 +1,67 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/params");
+const { setGlobalOptions } = require("firebase-functions/v2");
+const { defineSecret, defineString } = require("firebase-functions/params");
 const admin = require("firebase-admin");
-const OpenAI = require("openai");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const Anthropic = require("@anthropic-ai/sdk");
+
+// 🇰🇷 2026-11-17 싹 되살리기: 함수는 서울, 데이터는 서울 DB(«seoul», asia-northeast3)
+//   종전엔 함수 us-central1 + Firestore nam5(미국) — 학생 글 원문이 미국에 저장됐다.
+setGlobalOptions({ region: "asia-northeast3" });
+const DATABASE_ID = "seoul"; // 클라(src/config/firebase.js)·firebase.json 과 같은 값 — 한 곳만 바꾸지 말 것(8way grok)
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-const db = admin.firestore();
+const db = getFirestore(DATABASE_ID);
 const auth = admin.auth();
 const MAX_STUDENTS_PER_CLASS = 40;
 
-// OpenAI API 키 (Firebase Secret Manager)
-const openaiApiKey = defineSecret("OPENAI_API_KEY");
+// 🤖 AI 첨삭 = Claude Haiku 5.5(사용자 지정 2026-11-17 «Api 저렴한 하이쿠 같은 버전으로 해도 충분»)
+//   키는 Firebase Secret Manager, 모델은 배포 변수(AI_MODEL)로 바꿀 수 있다.
+const anthropicApiKey = defineSecret("ANTHROPIC_API_KEY");
+const AI_MODEL = defineString("AI_MODEL", { default: "claude-haiku-5-5" });
 
-// 🚀 OpenAI client 캐시 (warm start 시 재사용 - 인스턴스 생성 비용 절감)
-let _cachedOpenAI = null;
-function getOpenAIClient(apiKey) {
-  if (!_cachedOpenAI) {
-    _cachedOpenAI = new OpenAI({ apiKey: apiKey.trim() });
-  }
-  return _cachedOpenAI;
+// 🔒 국외(미국) AI 로 보내는 학생 글은 반드시 pii.mjs 로 이름·주소·학교·전화를 «ㅇㅇㅇ»로 가린 뒤 보낸다.
+//   callAI 는 { masked: true } 없이는 부르지 못한다 — 가리지 않은 길이 생기지 않게.
+const piiModule = import("./pii.mjs");
+async function maskForAI(text, extraWords) {
+  const { maskPII } = await piiModule;
+  return maskPII(String(text || ""), { extraWords: Array.isArray(extraWords) ? extraWords : [] });
 }
 
-// OpenAI 호출 헬퍼 (모든 함수에서 공통 사용)
-async function callOpenAI(
-  client,
-  prompt,
-  { temperature = 0.7, maxTokens = 2048, systemPrompt } = {},
-) {
-  const messages = [];
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
-  messages.push({ role: "user", content: prompt });
-  const result = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages,
-    temperature,
-    max_tokens: maxTokens,
+// Anthropic 이 미성년 사용자 제품에 요구하는 아동 안전 안내(지원 문서 «Guidelines for Organizations Serving Minors»)
+const CHILD_SAFETY =
+  "사용자는 한국 초등학생이다. 아이에게 맞는 쉬운 말로, 다정하고 안전하게 답한다. 폭력·성적·위험한 내용, 개인정보를 묻거나 만들어 내는 말은 하지 않는다. " +
+  "글 속 «ㅇㅇㅇ»는 개인정보를 가린 자리다 — 고치라고 하지 말고, 그 자리에 무엇이 있었는지 짐작하지도 마라.";
+
+let _client = null;
+function getClient() {
+  if (!_client) _client = new Anthropic({ apiKey: anthropicApiKey.value().trim(), maxRetries: 1, timeout: 90 * 1000 });
+  return _client;
+}
+
+/**
+ * Claude 호출. 학생 글이 들어간 프롬프트는 maskForAI 를 거친 뒤 { masked: true } 로 부른다.
+ * temperature 등은 Haiku 5.5 에서 기본값 외엔 400 — 받지만 무시한다.
+ */
+async function callAI(prompt, { maxTokens = 2048, systemPrompt, masked } = {}) {
+  if (masked !== true) throw new Error("callAI: 학생 글을 가리지 않은 호출(masked:true 필요)");
+  // 2차 그물(8way meta·gemini): masked 는 약속일 뿐이라, 보내기 직전 프롬프트 전체를 한 번 더 가린다(이미 가린 곳은 그대로)
+  const { maskPII } = await piiModule;
+  const second = maskPII(String(prompt));
+  if (second.hits.length) console.warn(`[callAI] 2차 가림 ${second.hits.length}건(${[...new Set(second.hits.map((h) => h.kind))].join(",")}) — 호출부 가림 누락 의심`);
+  prompt = second.text;
+  const res = await getClient().messages.create({
+    model: AI_MODEL.value(),
+    max_tokens: Math.max(1024, maxTokens),
+    system: [CHILD_SAFETY, systemPrompt].filter(Boolean).join("\n\n"),
+    output_config: { effort: "low" },
+    messages: [{ role: "user", content: prompt }],
   });
-  return result.choices[0].message.content;
+  if (res.stop_reason === "refusal") throw new Error("AI가 이 글에 답하지 않았어요.");
+  return res.content.filter((b) => b.type === "text").map((b) => b.text).join("");
 }
 
 // 공통 시스템 프롬프트
@@ -130,7 +151,7 @@ async function checkAndRecordUsage(userId, schoolId) {
         userId,
         count: newUserCount,
         date: today,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     )
@@ -144,7 +165,7 @@ async function checkAndRecordUsage(userId, schoolId) {
           schoolId,
           count: newSchoolCount,
           date: today,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       )
@@ -175,10 +196,10 @@ async function trackApiCost(userId, schoolId, tokenCount = 0) {
       .set(
         {
           yearMonth,
-          totalCalls: admin.firestore.FieldValue.increment(1),
-          totalTokens: admin.firestore.FieldValue.increment(tokenCount),
-          estimatedCostUSD: admin.firestore.FieldValue.increment(estimatedCost),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          totalCalls: FieldValue.increment(1),
+          totalTokens: FieldValue.increment(tokenCount),
+          estimatedCostUSD: FieldValue.increment(estimatedCost),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
@@ -689,7 +710,7 @@ async function removeTeacherClassCode(teacherId, classCode) {
       const teacherData = teacherDoc.data();
       if (teacherData.classCode === classCode) {
         await teacherRef.update({
-          classCode: admin.firestore.FieldValue.delete(),
+          classCode: FieldValue.delete(),
         });
       }
     }
@@ -856,7 +877,7 @@ exports.batchCreateStudents = onCall(async (request) => {
 
   if (newStudents.length > 0) {
     await classRef.update({
-      students: admin.firestore.FieldValue.arrayUnion(...newStudents),
+      students: FieldValue.arrayUnion(...newStudents),
     });
 
     // 🚀 학생 추가 후 슈퍼관리자 classesSummary 동기화
@@ -1229,7 +1250,7 @@ function getAnalysisCacheKey(text, topic, gradeLevel) {
 
 // Analyze writing using OpenAI - 🚀 최적화: 토큰 50% 절감 + 캐싱 + 사용량 제한
 exports.analyzeWriting = onCall(
-  { secrets: [openaiApiKey] },
+  { secrets: [anthropicApiKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1237,7 +1258,7 @@ exports.analyzeWriting = onCall(
 
     const userId = request.auth.uid;
     const data = request.data;
-    const {
+    let {
       text,
       gradeLevel,
       topic,
@@ -1248,6 +1269,11 @@ exports.analyzeWriting = onCall(
       previousText,
       schoolId,
     } = data || {};
+    // 🔒 국외 AI 로 가기 전 개인정보 가림(이름·주소·학교·전화 → ㅇㅇㅇ) — 학생이 미리보기에서 더 가린 낱말(maskWords) 포함
+    const maskWords = Array.isArray(data?.maskWords) ? data.maskWords : [];
+    if (text != null) text = (await maskForAI(text, maskWords)).text;
+    if (previousText != null) previousText = (await maskForAI(previousText, maskWords)).text;
+    if (topic != null) topic = (await maskForAI(topic, data?.maskWords)).text;
 
     if (isRewrite) {
       console.log(
@@ -1377,10 +1403,8 @@ AI판단: 잘쓴글≠AI, 낮은확률(10-20%)기본
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          const apiKey = openaiApiKey.value();
-          if (!apiKey) throw new Error("OpenAI API 키가 설정되지 않았습니다.");
-          const client = getOpenAIClient(apiKey); // 🚀 cached
-          responseText = await callOpenAI(client, prompt, {
+          responseText = await callAI(prompt, {
+            masked: true,
             maxTokens: 4096,
             systemPrompt: SYSTEM_PROMPTS.writingAnalyzer,
           });
@@ -1825,14 +1849,18 @@ AI판단: 잘쓴글≠AI, 낮은확률(10-20%)기본
 
 // Detect plagiarism
 exports.detectPlagiarism = onCall(
-  { secrets: [openaiApiKey] },
+  { secrets: [anthropicApiKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
     }
 
     const data = request.data;
-    const { text, previousSubmissions } = data || {};
+    let { text, previousSubmissions } = data || {};
+    if (text != null) text = (await maskForAI(text, data?.maskWords)).text;
+    if (Array.isArray(previousSubmissions)) {
+      previousSubmissions = await Promise.all(previousSubmissions.slice(0, 10).map(async (x) => ({ ...x, content: (await maskForAI(x?.content, data?.maskWords)).text })));
+    }
 
     if (!text) {
       throw new HttpsError("invalid-argument", "텍스트가 필요합니다.");
@@ -1870,10 +1898,8 @@ ${previousTexts}
   "details": "분석 결과 설명"
 }`;
 
-      const apiKey = openaiApiKey.value();
-      if (!apiKey) throw new Error("OpenAI API 키가 설정되지 않았습니다.");
-      const client = getOpenAIClient(apiKey); // 🚀 cached
-      const responseText = await callOpenAI(client, prompt, {
+      const responseText = await callAI(prompt, {
+            masked: true,
         systemPrompt: SYSTEM_PROMPTS.writingAnalyzer,
       });
 
@@ -2092,13 +2118,15 @@ function calculateAiDetectionScore(text) {
 }
 
 // Detect AI usage - GPTZero/Turnitin 기법 기반 강화 버전
-exports.detectAIUsage = onCall({ secrets: [openaiApiKey] }, async (request) => {
+exports.detectAIUsage = onCall({ secrets: [anthropicApiKey] }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
 
   const data = request.data;
-  const { text, topic } = data || {};
+  let { text, topic } = data || {};
+  if (text != null) text = (await maskForAI(text, data?.maskWords)).text;
+  if (topic != null) topic = (await maskForAI(topic, data?.maskWords)).text;
 
   if (!text) {
     throw new HttpsError("invalid-argument", "텍스트가 필요합니다.");
@@ -2161,10 +2189,8 @@ JSON만 응답:
   }
 }`;
 
-    const apiKey = openaiApiKey.value();
-    if (!apiKey) throw new Error("OpenAI API 키가 설정되지 않았습니다.");
-    const client = getOpenAIClient(apiKey); // 🚀 cached
-    const responseText = await callOpenAI(client, prompt, {
+    const responseText = await callAI(prompt, {
+            masked: true,
       systemPrompt: SYSTEM_PROMPTS.writingAnalyzer,
     });
 
@@ -2238,14 +2264,16 @@ const HELP_CACHE_TTL = 600000; // 10분
 
 // Get writing help - 🚀 최적화: 토큰 40% 절감 + 캐싱
 exports.getWritingHelp = onCall(
-  { secrets: [openaiApiKey] },
+  { secrets: [anthropicApiKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
     }
 
     const data = request.data;
-    const { text, topic, helpType } = data || {};
+    let { text, topic, helpType } = data || {};
+    if (text != null) text = (await maskForAI(text, data?.maskWords)).text;
+    if (topic != null) topic = (await maskForAI(topic, data?.maskWords)).text;
 
     if (!topic) {
       throw new HttpsError("invalid-argument", "주제가 필요합니다.");
@@ -2290,10 +2318,8 @@ JSON:{"expandIdeas":["구체적아이디어1","2","3"],"detailSuggestions":[{"pa
       };
 
       const prompt = prompts[helpType] || prompts.default;
-      const apiKey = openaiApiKey.value();
-      if (!apiKey) throw new Error("API 키 없음");
-      const client = getOpenAIClient(apiKey); // 🚀 cached
-      const responseText = await callOpenAI(client, prompt, {
+      const responseText = await callAI(prompt, {
+            masked: true,
         systemPrompt: SYSTEM_PROMPTS.writingHelper,
       });
 
@@ -2321,14 +2347,16 @@ JSON:{"expandIdeas":["구체적아이디어1","2","3"],"detailSuggestions":[{"pa
 
 // Get quick advice - 🚀 최적화: 토큰 50% 절감
 exports.getQuickAdvice = onCall(
-  { secrets: [openaiApiKey] },
+  { secrets: [anthropicApiKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
     }
 
     const data = request.data;
-    const { text, topic, gradeLevel, adviceType } = data || {};
+    let { text, topic, gradeLevel, adviceType } = data || {};
+    if (text != null) text = (await maskForAI(text, data?.maskWords)).text;
+    if (topic != null) topic = (await maskForAI(topic, data?.maskWords)).text;
 
     if (!text || !topic) {
       throw new HttpsError("invalid-argument", "텍스트와 주제가 필요합니다.");
@@ -2352,10 +2380,8 @@ exports.getQuickAdvice = onCall(
       const prompt = `${grade} "${topic}" 글:"""${text.slice(0, 300)}"""
 ${mode}. 친근하고 구체적으로 1-2문장. JSON:{"advice":"구체적조언","emoji":"이모지1개","nextHint":"다음에쓸수있는내용힌트"}`;
 
-      const apiKey = openaiApiKey.value();
-      if (!apiKey) throw new Error("API 키 없음");
-      const client = getOpenAIClient(apiKey); // 🚀 cached
-      const responseText = await callOpenAI(client, prompt, {
+      const responseText = await callAI(prompt, {
+            masked: true,
         systemPrompt: SYSTEM_PROMPTS.quickAdvice,
       });
 
@@ -2372,7 +2398,7 @@ ${mode}. 친근하고 구체적으로 1-2문장. JSON:{"advice":"구체적조언
 
 // Generate writing topics using OpenAI
 exports.generateTopics = onCall(
-  { secrets: [openaiApiKey] },
+  { secrets: [anthropicApiKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -2434,10 +2460,8 @@ ${categoryText}
   ]
 }`;
 
-      const apiKey = openaiApiKey.value();
-      if (!apiKey) throw new Error("OpenAI API 키가 설정되지 않았습니다.");
-      const client = getOpenAIClient(apiKey); // 🚀 cached
-      const text = await callOpenAI(client, prompt, {
+      const text = await callAI(prompt, {
+            masked: true,
         systemPrompt: SYSTEM_PROMPTS.topicGenerator,
       });
 
@@ -3333,7 +3357,7 @@ exports.autoAssignmentScheduler = onSchedule(
   {
     schedule: "0 8 * * 1-5", // 월-금 매일 오전 8시 (KST)
     timeZone: "Asia/Seoul",
-    secrets: [openaiApiKey],
+    secrets: [anthropicApiKey],
   },
   async (event) => {
     console.log("[자동 출제 스케줄러] 실행 시작:", new Date().toISOString());
@@ -3501,8 +3525,6 @@ async function generateAutoAssignmentInternal(
   const combinedCategory = `${randomType} - ${randomCategory}`;
 
   // AI로 주제 생성
-  const apiKey = openaiApiKey.value();
-  const client = getOpenAIClient(apiKey); // 🚀 cached
 
   const gradeLevelNames = {
     elementary_1: "초등학교 1학년",
@@ -3536,7 +3558,8 @@ async function generateAutoAssignmentInternal(
 - 글쓰기 유형(${randomType})에 적합한 주제
 - 분야(${randomCategory})와 관련된 내용`;
 
-  const responseText = await callOpenAI(client, prompt, {
+  const responseText = await callAI(prompt, {
+            masked: true,
     systemPrompt: SYSTEM_PROMPTS.topicGenerator,
   });
   const jsonMatch = responseText.match(/\[[\s\S]*\]/);
@@ -3596,7 +3619,7 @@ async function generateAutoAssignmentInternal(
     .collection("classes")
     .doc(classCode)
     .update({
-      assignmentSummary: admin.firestore.FieldValue.arrayUnion(newSummary),
+      assignmentSummary: FieldValue.arrayUnion(newSummary),
     });
 
   // 자동 출제 로그 저장
@@ -3691,8 +3714,8 @@ exports.seedSsakDBRubrics = onCall(async (request) => {
     const ref = db.collection("rubrics").doc(docId);
     batch.set(ref, {
       ...rubric,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
     count++;
   }
@@ -3731,8 +3754,8 @@ exports.seedSsakDBExamples = onCall(async (request) => {
     const ref = db.collection("examples").doc(docId);
     batch.set(ref, {
       ...example,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
     count++;
   }
@@ -3768,7 +3791,7 @@ exports.updateSsakDBMeta = onCall(async (request) => {
   await db.collection("ssakdb_meta").doc("stats").set({
     totalDocuments: total,
     collections: counts,
-    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    lastUpdated: FieldValue.serverTimestamp(),
     version: "2.0.0",
   });
 
@@ -3839,8 +3862,8 @@ exports.uploadSsakDBBatch = onCall(
         const ref = db.collection(collection).doc(docId);
         batch.set(ref, {
           ...docData,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         });
       }
 
@@ -4010,7 +4033,7 @@ exports.updateUsageLimits = onCall(async (request) => {
     .set({
       perUser: perUser || DAILY_API_LIMIT_PER_USER,
       perSchool: perSchool || DAILY_API_LIMIT_PER_SCHOOL,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       updatedBy: request.auth.uid,
     });
 

@@ -147,14 +147,14 @@ export default function PrivacyPolicy() {
                 </p>
               </div>
               <p className="text-gray-700 leading-relaxed mb-4">
-                서비스는 글쓰기 평가를 위해 작성된 글을 AI 서비스(OpenAI)에
-                전송하며, 이는 개인정보보호법 제28조의8에 따른 개인정보의 국외
+                서비스는 글쓰기 평가를 위해 작성된 글을 AI 서비스(Anthropic Claude)에
+                전송하며(보내기 전에 이름·주소·학교·전화번호를 «ㅇㅇㅇ»로 가림), 이는 개인정보보호법 제28조의8에 따른 개인정보의 국외
                 이전에 해당합니다.
               </p>
               <ul className="list-disc ml-6 text-gray-700 space-y-2">
                 <li>
                   <strong>전송 항목:</strong> 작성된 글 내용, 학년 정보, 주제
-                  (이름, 학번 등 개인식별정보 제외)
+                  (이름·주소·학교·전화번호·이메일은 자동으로 «ㅇㅇㅇ»로 가린 뒤 전송, 학생이 제출 전 미리보기에서 추가로 가릴 수 있음)
                 </li>
                 <li>
                   <strong>전송 목적:</strong> AI 기반 글쓰기 평가 및 피드백 생성
@@ -163,18 +163,21 @@ export default function PrivacyPolicy() {
                   <strong>이전되는 국가:</strong> 미국
                 </li>
                 <li>
-                  <strong>제공받는 자:</strong> OpenAI, Inc. (미국 소재)
+                  <strong>제공받는 자:</strong> Anthropic, PBC (Claude API)
                 </li>
                 <li>
                   <strong>이전 방법:</strong> HTTPS 암호화 통신을 통한 API 전송
                 </li>
                 <li>
-                  <strong>보유 기간:</strong> 평가 완료 후 30일 이내 삭제
-                  (OpenAI API 정책)
+                  <strong>보유 기간:</strong> 받은 날로부터 30일 이내 자동 삭제
+                  (Anthropic 정책 — 이용정책 위반 의심·법령상 보존 등 예외)
                 </li>
                 <li>
-                  <strong>AI 학습 미사용:</strong> OpenAI API 정책에 따라 전송된
-                  데이터는 AI 모델 학습에 사용되지 않습니다.
+                  <strong>AI 학습 미사용:</strong> Anthropic 상업 약관에 따라 API로
+                  전송된 데이터는 기본적으로 AI 모델 학습에 사용되지 않습니다.
+                </li>
+                <li>
+                  <strong>원본 저장 위치:</strong> 학생 글 원본은 대한민국(서울) 리전 데이터베이스에 저장합니다.
                 </li>
               </ul>
             </section>
