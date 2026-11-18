@@ -1,7 +1,8 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret, defineString } = require("firebase-functions/params");
-const admin = require("firebase-admin");
+const { initializeApp, getApps } = require("firebase-admin/app"); // firebase-admin 14: 이름공간(admin.*) 없음
+const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const Anthropic = require("@anthropic-ai/sdk");
 
@@ -10,12 +11,12 @@ const Anthropic = require("@anthropic-ai/sdk");
 setGlobalOptions({ region: "asia-northeast3" });
 const DATABASE_ID = "seoul"; // 클라(src/config/firebase.js)·firebase.json 과 같은 값 — 한 곳만 바꾸지 말 것(8way grok)
 
-if (admin.apps.length === 0) {
-  admin.initializeApp();
+if (getApps().length === 0) {
+  initializeApp();
 }
 
 const db = getFirestore(DATABASE_ID);
-const auth = admin.auth();
+const auth = getAuth();
 const MAX_STUDENTS_PER_CLASS = 40;
 
 // 🤖 AI 첨삭 = Claude Haiku 5.5(사용자 지정 2026-11-17 «Api 저렴한 하이쿠 같은 버전으로 해도 충분»)
@@ -822,7 +823,7 @@ exports.batchCreateStudents = onCall(async (request) => {
     const displayName = `학생${seq}`;
 
     try {
-      const userRecord = await admin.auth().createUser({
+      const userRecord = await getAuth().createUser({
         email,
         password,
         displayName,
