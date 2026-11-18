@@ -27,7 +27,7 @@ export default function MaskPreviewModal({ text, onConfirm, onCancel }) {
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white p-4 shadow-xl sm:p-6">
         <h2 className="text-lg font-bold text-emerald-800">🤖 AI 선생님에게 이렇게 보내요</h2>
         <p className="mt-1 text-sm text-gray-600">
-          AI 선생님은 <b>사람이 아니라 인공지능</b>이에요(미국 회사 Anthropic의 Claude). <b>이름·주소·학교·전화번호는 «ㅇㅇㅇ»로 가려서</b> 보내요.
+          AI 선생님은 <b>사람이 아니라 인공지능</b>이에요(미국 회사 Anthropic의 Claude). <b>이름·지역·주소·학교·전화번호는 «ㅇㅇㅇ»로 가려서</b> 보내요.
           아직 보이는 이름이나 사는 곳이 있으면 <b>그 낱말을 눌러</b> 더 가려 주세요.
         </p>
         <div className="mt-3 flex-1 overflow-y-auto whitespace-pre-wrap rounded-xl border border-gray-200 bg-gray-50 p-3 text-[15px] leading-7" data-mask-text>

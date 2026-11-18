@@ -109,11 +109,11 @@ function downloadConsentForm(teacherName, schoolName, className) {
 
 <h2>3. AI 평가를 위한 제3자 제공</h2>
 <div class="warning">
-  <strong>⚠️ 중요 안내:</strong> 글쓰기 평가를 위해 학생이 작성한 <strong>글 내용</strong>이 이름·주소·학교·전화번호를 «ㅇㅇㅇ»로 가린 뒤 AI 서비스(Anthropic Claude API)로 전송됩니다.
+  <strong>⚠️ 중요 안내:</strong> 글쓰기 평가를 위해 학생이 작성한 <strong>글 내용</strong>이 이름·지역·주소·학교·전화번호를 «ㅇㅇㅇ»로 가린 뒤 AI 서비스(Anthropic Claude API)로 전송됩니다.
 </div>
 <table>
   <tr><th>제공받는 자</th><td>Anthropic, PBC (미국, Claude API)</td></tr>
-  <tr><th>전송 항목</th><td>작성한 글 내용, 학년 정보, 글쓰기 주제 <strong>(이름·주소·학교·전화번호는 «ㅇㅇㅇ»로 가림)</strong></td></tr>
+  <tr><th>전송 항목</th><td>작성한 글 내용, 학년 정보, 글쓰기 주제 <strong>(이름·지역·주소·학교·전화번호는 «ㅇㅇㅇ»로 가림)</strong></td></tr>
   <tr><th>전송 목적</th><td>AI 기반 글쓰기 평가 및 피드백 생성</td></tr>
   <tr><th>보유 기간</th><td>받은 날로부터 30일 이내 자동 삭제 (Anthropic 정책, 이용정책 위반 의심 등 예외)</td></tr>
   <tr><th>AI 학습 사용</th><td><strong>사용하지 않음</strong> (Anthropic 상업 약관에 따라 API 데이터는 기본적으로 모델 학습에 미사용)</td></tr>

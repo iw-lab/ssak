@@ -148,7 +148,7 @@ export default function PrivacyConsent({ onConsent, userName }) {
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 mt-1">
-                  작성한 글이 이름·주소·학교·전화번호를 «ㅇㅇㅇ»로 가린 뒤 AI(Anthropic Claude)로 전송되어 평가됩니다.
+                  작성한 글이 이름·지역·주소·학교·전화번호를 «ㅇㅇㅇ»로 가린 뒤 AI(Anthropic Claude)로 전송되어 평가됩니다.
                 </p>
                 <button
                   type="button"
@@ -169,7 +169,7 @@ export default function PrivacyConsent({ onConsent, userName }) {
                     1. AI 처리 내용
                   </h4>
                   <ul className="list-disc ml-5 mt-1 space-y-1">
-                    <li>작성한 글 내용 — 보내기 전에 이름·주소·학교·전화번호·이메일을 자동으로 «ㅇㅇㅇ»로 가리고, 학생이 미리보기에서 더 가릴 수 있음</li>
+                    <li>작성한 글 내용 — 보내기 전에 이름·지역·주소·학교·전화번호·이메일을 자동으로 «ㅇㅇㅇ»로 가리고, 학생이 미리보기에서 더 가릴 수 있음</li>
                     <li>학년 정보 (적절한 평가 기준 적용을 위함)</li>
                     <li>글쓰기 주제</li>
                   </ul>
