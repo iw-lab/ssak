@@ -1,10 +1,12 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithCustomToken,
   signOut as firebaseSignOut
 } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { auth, db, functions } from '../config/firebase';
 import { SUPER_ADMIN_UID, ROLES } from '../config/auth';
 import { CacheManager, DEFAULT_TTL, LS_PREFIX, clearLocalStorageByPrefix } from '../utils/cacheUtils';
 
@@ -129,6 +131,14 @@ export async function loginUser(email, password) {
     console.error('로그인 에러:', error);
     throw error;
   }
+}
+
+// 자기번호 로그인 — 서버(pinLogin)가 학급코드·번호·숫자 4자리를 확인하고(틀린 횟수도 서버가 센다) 토큰을 준다
+export async function loginWithPin(classCode, number, pin) {
+  const res = await httpsCallable(functions, 'pinLogin')({ classCode, number: Number(number), pin });
+  const { user } = await signInWithCustomToken(auth, res.data.token);
+  const userDoc = await getDoc(doc(db, 'users', user.uid));
+  return { user, userData: userDoc.data() };
 }
 
 export async function signOut() {

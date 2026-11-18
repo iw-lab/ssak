@@ -71,7 +71,7 @@ export default function Register() {
     <AuthShell
       title="선생님 가입"
       subtitle="학급을 만들고 학생 글을 함께 키워요"
-      footer={<>이미 계정이 있나요? <Link to="/login" className="font-bold text-primary hover:underline">로그인</Link></>}
+      footer={<>이미 계정이 있나요? <Link to="/login?mode=id" className="font-bold text-primary hover:underline">로그인</Link></>}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <ErrorNote>{error}</ErrorNote>

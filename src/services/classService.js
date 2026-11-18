@@ -418,3 +418,10 @@ export async function resetStudentPassword(studentId, classCode) {
     throw error;
   }
 }
+
+// 자기번호(4자리) 새로 주기 — studentIds 를 빼면 반 전체. 반환 [{ studentId, studentName, number, pin }]
+export async function issueStudentPins(classCode, studentIds) {
+  const fn = httpsCallable(functions, 'issueStudentPins');
+  const result = await fn(studentIds ? { classCode, studentIds } : { classCode });
+  return result.data.results || [];
+}

@@ -616,6 +616,11 @@ async function deleteStudentsInClass(students) {
       // Firestore users document delete
       await db.doc(`users/${studentId}`).delete();
 
+      // 자기번호 자리도 비운다(남은 해시는 쓸모없지만 번호를 다음 학생에게 돌려주려고)
+      const pins = await db.collection("pinAuth").where("uid", "==", studentId).get();
+      //   읽은 뒤 바뀐 문서(그 번호를 새 학생이 받음)는 지우지 않는다 — 마지막 수정 시각을 조건으로
+      await Promise.all(pins.docs.map((d) => d.ref.delete({ lastUpdateTime: d.updateTime }).catch(() => {})));
+
       // Student writings delete
       const writingsQuery = db
         .collection("writings")
@@ -854,7 +859,7 @@ exports.batchCreateStudents = onCall(async (request) => {
         joinedAt: now,
       });
 
-      results.push({ email, password, status: "created" });
+      results.push({ email, password, status: "created", studentId: userRecord.uid });
     } catch (error) {
       results.push({
         email,
@@ -872,6 +877,20 @@ exports.batchCreateStudents = onCall(async (request) => {
 
     // 🚀 학생 추가 후 슈퍼관리자 classesSummary 동기화
     await syncSuperAdminClassesSummary();
+
+    // 만들면서 번호·자기번호도 같이 준다 — 나눠 줄 쪽지에 «학급코드·번호·자기번호» 세 가지만
+    const roster = [...(classData.students || []), ...newStudents];
+    // 자기번호가 실패해도 계정은 이미 만들어졌다 — 아이디·비번은 돌려주고 «자기번호 새로»로 다시 받게 한다
+    try {
+      const pins = await issuePins(classCode, roster, new Set(newStudents.map((s) => s.studentId)));
+      const byId = new Map(pins.map((p) => [p.studentId, p]));
+      for (const r of results) {
+        const p = byId.get(r.studentId);
+        if (p) { r.number = p.number; r.pin = p.pin; }
+      }
+    } catch (e) {
+      console.error("[학생 생성] 자기번호 실패:", e.message);
+    }
   }
 
   return {
@@ -1079,6 +1098,184 @@ exports.resetStudentPassword = onCall(async (request) => {
   } catch (error) {
     throw new HttpsError("internal", `비밀번호 초기화 실패: ${error.message}`);
   }
+});
+
+// 🔢 자기번호 로그인 — 학급코드 + 번호 + 숫자 4자리(2026-11-18 «게임처럼 자기번호로 집에서도 이어서»).
+//   비번 쪽지 없이 저학년도 들어오게 하되, 4자리는 맞혀 보기에 약하므로 서버가 횟수를 센다:
+//   5번 틀리면 15분 잠금, 모두 10번 틀리면 선생님이 새로 줄 때까지 잠금(맞히면 0으로).
+//   해시는 서버 전용 컬렉션 pinAuth(규칙상 아무도 못 읽음)에만 있고, 성공하면 커스텀 토큰을 준다.
+const { scrypt, randomBytes, timingSafeEqual } = require("crypto");
+const PIN_SOFT_LOCK = 5;
+const PIN_HARD_LOCK = 10;
+const PIN_LOCK_MS = 15 * 60 * 1000;
+const pinKey = (classCode, number) => `${classCode}_${String(number).padStart(2, "0")}`;
+// 비동기 scrypt — 동기로 돌리면 요청이 몰릴 때 같은 인스턴스의 다른 호출까지 멈춘다(8way codex)
+const hashPin = (pin, salt) => new Promise((ok, no) => scrypt(pin, salt, 32, (e, k) => (e ? no(e) : ok(k.toString("hex")))));
+function newPin() {
+  for (;;) {
+    const p = String(randomInt(10000)).padStart(4, "0");
+    // 0000·1111 같은 겹수와 1234·4321 같은 줄 번호는 친구가 먼저 넣어 본다
+    if (/^(\d)\1{3}$/.test(p) || "0123456789".includes(p) || "9876543210".includes(p)) continue;
+    return p;
+  }
+}
+
+// 학급 주인(승인 교사)이나 관리자만 — resetStudentPassword 와 같은 문
+async function assertClassOwner(request, classCode) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  const me = (await db.doc(`users/${request.auth.uid}`).get()).data();
+  const isAdmin = me?.role === "super_admin";
+  if (!isAdmin && !(me?.role === "teacher" && me.approved === true)) {
+    throw new HttpsError("permission-denied", "승인된 교사만 할 수 있습니다.");
+  }
+  if (typeof classCode !== "string" || !/^[A-Za-z0-9]{4,12}$/.test(classCode)) {
+    throw new HttpsError("invalid-argument", "학급 코드가 올바르지 않습니다.");
+  }
+  const classSnap = await db.doc(`classes/${classCode}`).get();
+  if (!classSnap.exists) throw new HttpsError("not-found", "클래스를 찾을 수 없습니다.");
+  const classData = classSnap.data();
+  if (!isAdmin && classData.teacherId !== request.auth.uid) {
+    throw new HttpsError("permission-denied", "해당 클래스의 담당 교사만 할 수 있습니다.");
+  }
+  return classData;
+}
+
+// 명단의 학생들에게 번호·자기번호를 준다. 번호는 한 번 정해지면 그대로(아이디 끝 두 자리와 같게),
+//   자기번호만 새로. 반환 = [{ studentId, studentName, number, pin }]
+async function issuePins(classCode, roster, targetIds) {
+  // 번호 고르기와 쓰기를 한 트랜잭션으로 — «자기번호 새로»를 두 명에게 동시에 눌러도 같은 번호를 받지 않게
+  return db.runTransaction((tx) => issuePinsTx(tx, classCode, roster, targetIds));
+}
+async function issuePinsTx(tx, classCode, roster, targetIds) {
+  const existing = await tx.get(db.collection("pinAuth").where("classCode", "==", classCode));
+  const rosterIds = new Set(roster.map((s) => s.studentId));
+  const numberOf = new Map(); // uid → 번호
+  const taken = new Set(); // 지금 학급에 있는 학생이 쓰는 번호
+  const oldPin = new Map(); // uid → { salt, hash } — 새로 뽑은 숫자가 옛 것과 같으면 «새로»가 아니다
+  for (const d of existing.docs) {
+    const p = d.data();
+    if (rosterIds.has(p.uid) && !numberOf.has(p.uid)) {
+      numberOf.set(p.uid, p.number);
+      taken.add(p.number);
+      oldPin.set(p.uid, p);
+    }
+  }
+  const idBase = classCode.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const emailRe = new RegExp(`^${idBase}(\\d{2,})@${STUDENT_EMAIL_DOMAIN.replace(/\./g, "\\.")}$`);
+  const targets = roster.filter((s) => targetIds.has(s.studentId));
+  // 아이디에 번호가 박힌 학생부터 자리를 잡는다(아이디 ab3k9z07 = 7번)
+  const emails = new Map();
+  await Promise.all(targets.map(async (s) => {
+    if (numberOf.has(s.studentId)) return;
+    const u = (await tx.get(db.doc(`users/${s.studentId}`))).data();
+    emails.set(s.studentId, String(u?.email || ""));
+  }));
+  for (const s of targets) {
+    if (numberOf.has(s.studentId)) continue;
+    const m = emailRe.exec(emails.get(s.studentId) || "");
+    const n = m ? Number(m[1]) : NaN;
+    if (Number.isInteger(n) && n >= 1 && n <= 99 && !taken.has(n)) {
+      numberOf.set(s.studentId, n);
+      taken.add(n);
+    }
+  }
+  let next = 1;
+  for (const s of targets) {
+    if (numberOf.has(s.studentId)) continue;
+    while (taken.has(next)) next++;
+    if (next > 99) throw new HttpsError("resource-exhausted", "번호가 99번을 넘었습니다.");
+    numberOf.set(s.studentId, next);
+    taken.add(next);
+  }
+  const out = [];
+  const batch = tx; // 트랜잭션도 set·delete 를 같은 모양으로 받는다
+  const now = Date.now();
+  for (const s of targets) {
+    const number = numberOf.get(s.studentId);
+    const prev = oldPin.get(s.studentId);
+    let pin = newPin();
+    while (prev && (await hashPin(pin, prev.salt)) === prev.hash) pin = newPin();
+    const salt = randomBytes(16).toString("hex");
+    batch.set(db.doc(`pinAuth/${pinKey(classCode, number)}`), {
+      uid: s.studentId, classCode, number, salt, hash: await hashPin(pin, salt),
+      fails: 0, lockedUntil: null, issuedAt: now,
+    });
+    out.push({ studentId: s.studentId, studentName: s.studentName || "", number, pin });
+  }
+  // 학생이 다른 번호로 옮겨 갔다면 옛 자리 문서는 지운다(같은 학생이 두 번호로 들어오지 않게)
+  for (const d of existing.docs) {
+    const p = d.data();
+    if (targetIds.has(p.uid) && numberOf.get(p.uid) !== p.number) batch.delete(d.ref);
+  }
+  return out.sort((a, b) => a.number - b.number);
+}
+
+exports.issueStudentPins = onCall(async (request) => {
+  const { classCode, studentIds } = request.data || {};
+  const classData = await assertClassOwner(request, classCode);
+  const roster = Array.isArray(classData.students) ? classData.students : [];
+  if (studentIds !== undefined && (!Array.isArray(studentIds) || studentIds.length > MAX_STUDENTS_PER_CLASS)) {
+    throw new HttpsError("invalid-argument", "studentIds 가 올바르지 않습니다.");
+  }
+  const ids = new Set(studentIds ? studentIds.map(String) : roster.map((s) => s.studentId));
+  const results = await issuePins(classCode, roster, ids);
+  return { results };
+});
+
+exports.pinLogin = onCall(async (request) => {
+  const d = request.data || {};
+  const classCode = String(d.classCode || "").trim().toUpperCase();
+  // 번호는 정수 또는 숫자 글자만(true·"1e1"·"0x7" 같은 것은 받지 않는다), 자기번호는 문자열 숫자 4개만
+  const rawNum = typeof d.number === "number" ? String(d.number) : typeof d.number === "string" ? d.number.trim() : "";
+  const number = /^\d{1,2}$/.test(rawNum) ? Number(rawNum) : NaN;
+  const pin = typeof d.pin === "string" ? d.pin : "";
+  if (!/^[A-Z0-9]{4,12}$/.test(classCode) || !Number.isInteger(number) || number < 1 || number > 99 || !/^\d{4}$/.test(pin)) {
+    throw new HttpsError("invalid-argument", "학급 코드, 번호, 자기번호 4자리를 확인해 주세요.");
+  }
+  const ref = db.doc(`pinAuth/${pinKey(classCode, number)}`);
+  const now = Date.now();
+  // 틀린 횟수는 트랜잭션 안에서 센다(동시에 여러 번 넣어도 한 번씩). 거절은 트랜잭션 «밖»에서 던진다 —
+  //   안에서 던지면 쓰기가 취소돼 틀린 횟수가 안 올라간다.
+  const r = await db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists) {
+      await hashPin(pin, "0000000000000000"); // 없는 번호도 같은 시간이 걸리게
+      return { kind: "wrong" };
+    }
+    const p = s.data();
+    const fails = p.fails || 0;
+    if (fails >= PIN_HARD_LOCK) return { kind: "hard" };
+    if (p.lockedUntil && p.lockedUntil > now) return { kind: "soft", until: p.lockedUntil };
+    const ok = timingSafeEqual(Buffer.from(await hashPin(pin, p.salt), "hex"), Buffer.from(p.hash, "hex"));
+    if (ok) {
+      tx.update(ref, { fails: 0, lockedUntil: null, lastLoginAt: now });
+      return { kind: "ok", uid: p.uid };
+    }
+    const f = fails + 1;
+    const soft = f < PIN_HARD_LOCK && f % PIN_SOFT_LOCK === 0;
+    tx.update(ref, { fails: f, lockedUntil: soft ? now + PIN_LOCK_MS : null });
+    if (f >= PIN_HARD_LOCK) return { kind: "hard" };
+    if (soft) return { kind: "soft", until: now + PIN_LOCK_MS };
+    return { kind: "wrong", f };
+  });
+  if (r.kind === "hard") {
+    throw new HttpsError("resource-exhausted", "너무 많이 틀려서 잠겼어요. 선생님께 자기번호를 새로 받아요.");
+  }
+  if (r.kind === "soft") {
+    const min = Math.max(1, Math.ceil((r.until - now) / 60000));
+    throw new HttpsError("resource-exhausted", `여러 번 틀려서 잠겼어요. ${min}분 뒤에 다시 해 보세요.`);
+  }
+  const wrongMsg = "번호나 자기번호가 맞지 않아요." + (!r.f ? "" : r.f < PIN_SOFT_LOCK
+    ? ` ${PIN_SOFT_LOCK - r.f}번 더 틀리면 잠시 잠겨요.`
+    : ` ${PIN_HARD_LOCK - r.f}번 더 틀리면 선생님께 새로 받아야 해요.`);
+  if (r.kind !== "ok") throw new HttpsError("unauthenticated", wrongMsg);
+  // 문서만 믿지 않는다 — 지금도 이 학급 학생인지 확인(지운 학생·반을 옮긴 학생의 옛 자리는 못 씀)
+  const u = (await db.doc(`users/${r.uid}`).get()).data();
+  if (!u || u.role !== "student" || u.classCode !== classCode) {
+    throw new HttpsError("unauthenticated", "번호나 자기번호가 맞지 않아요.");
+  }
+  const token = await auth.createCustomToken(r.uid);
+  return { token };
 });
 
 // 🚀 글쓰기 품질 검사 함수 (반복문장, 무의미한 글 감지)

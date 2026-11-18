@@ -13,6 +13,7 @@ import {
   removeStudentFromClass,
   getStudentDetails,
   resetStudentPassword,
+  issueStudentPins,
 } from "../services/classService";
 import {
   deleteWriting,
@@ -197,6 +198,8 @@ export default function TeacherDashboard({ user, userData }) {
   const [classAccounts, setClassAccounts] = useState({}); // Store accounts by classCode
   const [studentDetails, setStudentDetails] = useState({}); // Store student details (email) by studentId
   const [resetPasswordLoading, setResetPasswordLoading] = useState(null); // studentId of currently resetting
+  const [classPins, setClassPins] = useState({}); // classCode → [{ number, studentName, pin }] — 이번 화면에서만(저장 안 함)
+  const [pinLoading, setPinLoading] = useState(null); // classCode 또는 studentId
 
   const [newClass, setNewClass] = useState({
     className: "",
@@ -1393,6 +1396,26 @@ export default function TeacherDashboard({ user, userData }) {
     }
   };
 
+  // 자기번호 새로 주기 — studentId 를 주면 그 학생만, 없으면 반 전체
+  const handleIssuePins = async (classCode, studentId) => {
+    const msg = studentId
+      ? "이 학생의 자기번호를 새로 만들까요?\n전에 쓰던 자기번호는 더 이상 안 돼요. (잠긴 것도 풀려요)"
+      : "반 학생 모두의 자기번호를 새로 만들까요?\n전에 쓰던 자기번호는 모두 더 이상 안 돼요.";
+    if (!confirm(msg)) return;
+    setPinLoading(studentId || classCode);
+    try {
+      const rows = await issueStudentPins(classCode, studentId ? [studentId] : undefined);
+      setClassPins((prev) => {
+        const keep = (prev[classCode] || []).filter((r) => !rows.some((n) => n.studentId === r.studentId));
+        return { ...prev, [classCode]: [...keep, ...rows].sort((a, b) => a.number - b.number) };
+      });
+    } catch (error) {
+      alert("자기번호를 만들지 못했어요: " + (error.message || "알 수 없는 오류"));
+    } finally {
+      setPinLoading(null);
+    }
+  };
+
   const handleBatchCreate = async () => {
     const targetClass = classes.find((c) => c.classCode === batchTargetClass);
 
@@ -1885,6 +1908,12 @@ export default function TeacherDashboard({ user, userData }) {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-4 py-2 text-left font-semibold text-gray-600">
+                            번호
+                          </th>
+                          <th className="px-4 py-2 text-left font-semibold text-gray-600">
+                            자기번호
+                          </th>
+                          <th className="px-4 py-2 text-left font-semibold text-gray-600">
                             아이디
                           </th>
                           <th className="px-4 py-2 text-left font-semibold text-gray-600">
@@ -1901,6 +1930,12 @@ export default function TeacherDashboard({ user, userData }) {
                       <tbody className="divide-y divide-gray-200">
                         {batchResults.map((item, idx) => (
                           <tr key={`${item.email}-${idx}`}>
+                            <td className="px-4 py-2 font-bold text-gray-800">
+                              {item.number ?? "-"}
+                            </td>
+                            <td className="px-4 py-2 font-mono text-lg font-bold tracking-widest text-indigo-700">
+                              {item.pin || "-"}
+                            </td>
                             <td className="px-4 py-2 text-gray-800">
                               {item.email?.split("@")[0]}
                             </td>
@@ -3204,6 +3239,60 @@ export default function TeacherDashboard({ user, userData }) {
               </button>
             </div>
 
+            <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+              <h3 className="font-semibold text-indigo-900">자기번호로 들어오기</h3>
+              <p className="mt-1 text-sm text-indigo-800">
+                학생은 아래 주소에서 <b>내 번호</b>와 <b>자기번호(숫자 4개)</b>만 넣으면 돼요. 집에서도 똑같아요.
+                5번 틀리면 15분, 10번 틀리면 «자기번호 새로»를 눌러 줄 때까지 잠겨요.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <code className="rounded bg-white px-2 py-1 text-sm text-indigo-900 break-all">
+                  {`${window.location.origin}/login?class=${selectedClass.classCode}`}
+                </code>
+                <button
+                  onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/login?class=${selectedClass.classCode}`).then(() => alert("주소를 복사했어요."), () => {})}
+                  className="rounded bg-white px-3 py-1 text-sm font-semibold text-indigo-700 border border-indigo-300 hover:bg-indigo-100"
+                >
+                  주소 복사
+                </button>
+                <button
+                  onClick={() => handleIssuePins(selectedClass.classCode)}
+                  disabled={pinLoading === selectedClass.classCode || !selectedClass.students?.length}
+                  className="rounded bg-indigo-600 px-3 py-1 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {pinLoading === selectedClass.classCode ? "만드는 중..." : "반 전체 자기번호 새로 만들기"}
+                </button>
+              </div>
+              {classPins[selectedClass.classCode]?.length > 0 && (
+                <div className="mt-3 rounded bg-white p-3">
+                  <p className="mb-2 text-xs text-indigo-700">
+                    <Emo n="AlertTriangle" /> 자기번호는 지금 한 번만 보여요(서버에도 숫자는 남지 않아요). 인쇄하거나 옮겨 적어 주세요.
+                  </p>
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-indigo-100 text-left text-indigo-900">
+                        <th className="px-2 py-1">번호</th>
+                        <th className="px-2 py-1">이름</th>
+                        <th className="px-2 py-1">자기번호</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classPins[selectedClass.classCode].map((r) => (
+                        <tr key={r.studentId} className="border-b border-indigo-50">
+                          <td className="px-2 py-1 font-bold">{r.number}</td>
+                          <td className="px-2 py-1">{r.studentName}</td>
+                          <td className="px-2 py-1 font-mono text-lg font-bold tracking-widest text-indigo-700">{r.pin}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button onClick={() => window.print()} className="mt-2 rounded border border-indigo-300 px-3 py-1 text-sm text-indigo-700 hover:bg-indigo-50">
+                    인쇄
+                  </button>
+                </div>
+              )}
+            </div>
+
             <h3 className="font-semibold mb-2">
               학생 목록 ({selectedClass.students?.length || 0}/
               {selectedClass.maxStudents || MAX_STUDENTS_PER_CLASS})
@@ -3232,6 +3321,13 @@ export default function TeacherDashboard({ user, userData }) {
                       </p>
                     </div>
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => handleIssuePins(selectedClass.classCode, student.studentId)}
+                        disabled={pinLoading === student.studentId}
+                        className="bg-indigo-500 text-white px-3 py-1 rounded text-sm hover:bg-indigo-600 disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {pinLoading === student.studentId ? "만드는 중..." : "자기번호 새로"}
+                      </button>
                       <button
                         onClick={() =>
                           handleResetPassword(
@@ -3273,12 +3369,18 @@ export default function TeacherDashboard({ user, userData }) {
                   <div className="bg-emerald-50 p-4 rounded border border-emerald-200">
                     <p className="text-xs text-emerald-700 mb-3">
                       <Emo n="AlertTriangle" /> 이 표는 지금 한 번만 보여요(저장하지 않아요). 인쇄하거나 옮겨 적어
-                      학생에게 나눠 주세요. 잊으면 «비밀번호 초기화»로 새로 만들 수 있어요.
+                      학생에게 나눠 주세요. 학생은 «번호 + 자기번호»만 알면 돼요. 잊으면 «자기번호 새로»(또는 «비밀번호 초기화»)로 새로 만들 수 있어요.
                     </p>
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-sm">
                         <thead>
                           <tr className="border-b border-emerald-200">
+                            <th className="px-2 py-2 text-left text-emerald-900">
+                              번호
+                            </th>
+                            <th className="px-2 py-2 text-left text-emerald-900">
+                              자기번호
+                            </th>
                             <th className="px-2 py-2 text-left text-emerald-900">
                               아이디
                             </th>
@@ -3294,6 +3396,12 @@ export default function TeacherDashboard({ user, userData }) {
                                 key={idx}
                                 className="border-b border-emerald-100"
                               >
+                                <td className="px-2 py-2 text-xs font-bold">
+                                  {account.number ?? "-"}
+                                </td>
+                                <td className="px-2 py-2 font-mono text-sm font-bold text-indigo-700">
+                                  {account.pin || "-"}
+                                </td>
                                 <td className="px-2 py-2 font-mono text-xs">
                                   {account.email?.split("@")[0]}
                                 </td>
@@ -4268,8 +4376,9 @@ export default function TeacherDashboard({ user, userData }) {
                         <div className="text-sm text-green-600 max-h-32 overflow-y-auto">
                           {batchResults.slice(0, 5).map((acc, idx) => (
                             <div key={idx} className="flex gap-4 py-1">
-                              <span>ID: {acc.email.split("@")[0]}</span>
-                              <span>PW: {acc.password}</span>
+                              <span>{acc.number}번</span>
+                              <span>자기번호: {acc.pin || "-"}</span>
+                              <span className="text-green-500">ID: {acc.email.split("@")[0]}</span>
                             </div>
                           ))}
                           {batchResults.length > 5 && (

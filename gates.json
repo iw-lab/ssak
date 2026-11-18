@@ -39,7 +39,7 @@
    "mode": "block",
    "match": "length \\? 1 : 0",
    "cost_s": "40",
-   "note": "Firestore 규칙 공격 시험 64종 — 다른 반·다른 학교·낯선 가입자 접근 차단 + 정상 조회 허용(scripts/test-rules-privacy.mjs)"
+   "note": "Firestore 규칙 공격 시험 68종(자기번호 해시 못 읽음 포함) — 다른 반·다른 학교·낯선 가입자 접근 차단 + 정상 조회 허용(scripts/test-rules-privacy.mjs)"
   },
   {
    "id": "student-account-minimal",
@@ -58,6 +58,15 @@
    "match": "process\\.exit\\(bad",
    "cost_s": "60",
    "note": "AI 문지기 — 미승인·학급 없는 계정 차단, 사람/학급/전체 하루 한도, 동시 호출로 못 넘김(scripts/test-ai-guard.mjs, 가짜 Anthropic 으로 실제 호출 수 셈)"
+  },
+  {
+   "id": "pin-login",
+   "stage": "deploy",
+   "class": "access-control",
+   "mode": "block",
+   "match": "process\\.exit\\(bad",
+   "cost_s": "60",
+   "note": "자기번호 로그인 — 맞으면 그 학생, 5번 틀리면 잠금·10번 하드잠금, 동시 시도로 횟수 못 샘, 남의 반 교사·학생은 발급 불가, 반에서 빠진 학생 거절(scripts/test-pin-login.mjs)"
   }
  ]
 }

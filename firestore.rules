@@ -328,6 +328,11 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // 자기번호 해시·틀린 횟수 — 함수(pinLogin·issueStudentPins)만 다룬다. 관리자도 못 읽는다
+    match /pinAuth/{docId} {
+      allow read, write: if false;
+    }
+
     // API 사용량 추적 (Cloud Functions에서 기록, 관리자만 읽기)
     match /usage/{docId} {
       allow read: if isSuperAdmin(); // 사용자별 사용량 — 관리자만(앱은 함수 getUsageStats 로 본다)

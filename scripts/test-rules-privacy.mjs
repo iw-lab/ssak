@@ -36,6 +36,7 @@ await adb.doc("schedulers/A1").set({ enabled: true });
 await adb.doc("retiredClassCodes/OLD111").set({ retiredAt: "2026-03-01" });
 await adb.doc("schedulers/B1").set({ enabled: true });
 await adb.doc("usage/usage_x_2026-11-18").set({ count: 3 });
+await adb.doc("pinAuth/A1_01").set({ uid: sA, classCode: "A1", number: 1, salt: "s", hash: "h", fails: 0 });
 await adb.doc("writings/wNull").set({ studentId: sB, classCode: null, content: "옛 글", isDraft: false });
 await adb.doc("writings/wA1").set({ studentId: sA, classCode: "A1", content: "내 글", topic: "일기", isDraft: false, createdAt: "2026-11-18" });
 
@@ -117,11 +118,15 @@ await client(async (auth, db) => {
   await attack("담임: 반 문서만 직접 지우기(학생·글은 남김)", () => deleteDoc(doc(db, "classes/A1")));
   await attack("담임: 은퇴 코드 목록 읽기", () => getDoc(doc(db, "retiredClassCodes/OLD111")));
   await attack("담임: 사용량 기록 읽기", () => getDoc(doc(db, "usage/usage_x_2026-11-18")));
+  await attack("담임: 자기번호 해시 읽기", () => getDoc(doc(db, "pinAuth/A1_01")));
+  await attack("담임: 자기번호 직접 바꾸기", () => setDoc(doc(db, "pinAuth/A1_01"), { uid: sA, classCode: "A1", number: 1, salt: "s", hash: "x", fails: 0 }));
 });
 // 4) 학생이 친구·다른 반 것을 읽거나 고치기
 await client(async (auth, db) => {
   await signInWithEmailAndPassword(auth, "sa001@school-a.kr", "secret123");
   await attack("학생이 같은 반 친구 글 읽기", () => getDoc(doc(db, "writings/wA2")));
+  await attack("학생: 내 자기번호 해시 읽기", () => getDoc(doc(db, "pinAuth/A1_01")));
+  await attack("학생: 틀린 횟수 0으로 되돌리기", () => updateDoc(doc(db, "pinAuth/A1_01"), { fails: 0, lockedUntil: null }));
   await attack("학생이 다른 반 명단 읽기", () => getDoc(doc(db, "classes/B1")));
   await attack("학생이 다른 반 명단 고치기", () => updateDoc(doc(db, "classes/B1"), { students: [] }));
   await attack("학생이 스스로 교사로 바꾸기", () => updateDoc(doc(db, `users/${sA}`), { role: "teacher" }));

@@ -81,7 +81,7 @@ export default function PrivacyPolicy() {
                         학생
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        학생 번호 이름(예: 학생01)·별명, 학년, 학급, 로그인 아이디(학급코드+번호 — 교사가 일괄 생성, 학생 실명·연락처·학교명은 받지 않음)
+                        학생 번호 이름(예: 학생01)·별명, 학년, 학급, 로그인 아이디(학급코드+번호 — 교사가 일괄 생성, 학생 실명·연락처·학교명은 받지 않음), 자기번호(숫자 4자리 — 되돌릴 수 없는 값으로 바꿔 저장하고 틀린 횟수만 셈)
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         회원 식별, 학습 관리
