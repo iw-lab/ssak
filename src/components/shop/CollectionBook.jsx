@@ -1,3 +1,4 @@
+import Emo from "../Emo.jsx";
 import { useState, useMemo, memo } from 'react';
 import {
   ITEM_SETS, ACHIEVEMENT_ITEMS, RARITY_CONFIG,
@@ -41,14 +42,14 @@ const CollectionBook = memo(({ ownedItems = [], stats = {}, onClose }) => {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold flex items-center gap-2">
-              📚 컬렉션 북
+              <Emo n="BookOpen" /> 컬렉션 북
             </h3>
             <p className="text-white/80 text-xs mt-1">
               {collectionStats.owned}/{collectionStats.total} 수집 · 세트 {completedSets}/{collectionStats.totalSets} 완성
             </p>
           </div>
           {onClose && (
-            <button onClick={onClose} className="text-white/70 hover:text-white text-xl">✕</button>
+            <button onClick={onClose} className="text-white/70 hover:text-white text-xl"><Emo n="X" /></button>
           )}
         </div>
 
@@ -183,7 +184,7 @@ const CollectionBook = memo(({ ownedItems = [], stats = {}, onClose }) => {
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
                     ach.unlocked ? 'bg-white/60' : 'bg-gray-200 grayscale'
                   }`}>
-                    {ach.unlocked ? ach.emoji : '🔒'}
+                    {ach.unlocked ? ach.emoji : '🔒' /* design-gate: emoji-ok */}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -195,7 +196,7 @@ const CollectionBook = memo(({ ownedItems = [], stats = {}, onClose }) => {
                   </div>
 
                   {ach.unlocked ? (
-                    <span className="text-green-500 text-lg">✓</span>
+                    <span className="text-green-500 text-lg"><Emo n="Check" /></span>
                   ) : (
                     <span className="text-gray-400 text-xs">미달성</span>
                   )}

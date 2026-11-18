@@ -17,12 +17,12 @@ import { createAssignment, getAssignmentsByClass } from "./assignmentService";
 const devLog = import.meta.env.DEV ? console.log.bind(console) : () => {};
 
 // ============================================
-// 🚀 캐싱 시스템 - Firestore 읽기 최적화 (10,000명 대응)
+// 캐싱 시스템 - Firestore 읽기 최적화 (10,000명 대응)
 // ============================================
 const schedulerCache = new Map(); // classCode -> { data, timestamp }
 const autoAssignmentTodayCache = new Map(); // classCode -> { result, date }
 
-const CACHE_TTL = 7200000; // 🔥 2시간 - 스케줄러 설정은 거의 변경 안됨 (변경 시 무효화됨)
+const CACHE_TTL = 7200000; // 2시간 - 스케줄러 설정은 거의 변경 안됨 (변경 시 무효화됨)
 const LS_PREFIX = "ssak_sched_";
 
 function isCacheValid(timestamp) {
@@ -31,7 +31,7 @@ function isCacheValid(timestamp) {
   return Date.now() - timestamp < CACHE_TTL + jitter;
 }
 
-// 🔥 LocalStorage에 스케줄러 설정 저장
+// LocalStorage에 스케줄러 설정 저장
 function saveToLocalStorage(key, data) {
   try {
     const item = { data, timestamp: Date.now() };
@@ -41,7 +41,7 @@ function saveToLocalStorage(key, data) {
   }
 }
 
-// 🔥 LocalStorage에서 스케줄러 설정 로드
+// LocalStorage에서 스케줄러 설정 로드
 function loadFromLocalStorage(key) {
   try {
     const item = localStorage.getItem(LS_PREFIX + key);
@@ -77,7 +77,7 @@ export async function saveSchedulerSettings(classCode, settings) {
       updatedAt: new Date().toISOString(),
     });
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateSchedulerCache(classCode);
 
     return { success: true };
@@ -87,7 +87,7 @@ export async function saveSchedulerSettings(classCode, settings) {
   }
 }
 
-// 🚀 최적화: 캐싱 추가 (메모리 + LocalStorage 이중 캐시)
+// 최적화: 캐싱 추가 (메모리 + LocalStorage 이중 캐시)
 export async function getSchedulerSettings(classCode, forceRefresh = false) {
   try {
     // classCode 유효성 검사
@@ -96,26 +96,26 @@ export async function getSchedulerSettings(classCode, forceRefresh = false) {
       return null;
     }
 
-    // 🔥 1. 메모리 캐시 확인
+    // 1. 메모리 캐시 확인
     if (!forceRefresh) {
       const cached = schedulerCache.get(classCode);
       if (cached && isCacheValid(cached.timestamp)) {
-        devLog(`[📊 DB읽기] getSchedulerSettings 메모리 캐시 히트`);
+        devLog(`[ DB읽기] getSchedulerSettings 메모리 캐시 히트`);
         return cached.data;
       }
 
-      // 🔥 2. LocalStorage 캐시 확인
+      // 2. LocalStorage 캐시 확인
       const lsData = loadFromLocalStorage(classCode);
       if (lsData) {
-        devLog(`[📊 DB읽기] getSchedulerSettings LocalStorage 캐시 히트`);
+        devLog(`[ DB읽기] getSchedulerSettings LocalStorage 캐시 히트`);
         schedulerCache.set(classCode, { data: lsData, timestamp: Date.now() });
         return lsData;
       }
     }
 
-    // 🔥 3. DB에서 조회 (캐시 미스 시에만)
+    // 3. DB에서 조회 (캐시 미스 시에만)
     devLog(
-      `[📊 DB읽기] getSchedulerSettings DB 조회 - classCode: ${classCode}`,
+      `[ DB읽기] getSchedulerSettings DB 조회 - classCode: ${classCode}`,
     );
     const schedulerDoc = await getDoc(doc(db, "schedulers", classCode));
     const result = schedulerDoc.exists() ? schedulerDoc.data() : null;
@@ -265,7 +265,7 @@ export async function generateAutoAssignment(
       createdAt: new Date().toISOString(),
     });
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateAutoAssignmentCache(classCode);
 
     return assignment;
@@ -294,7 +294,7 @@ function calculateSimilarity(str1, str2) {
   return matches / longer.length;
 }
 
-// 🚀 최적화: 오늘 날짜 캐싱 + Firestore 서버사이드 필터링
+// 최적화: 오늘 날짜 캐싱 + Firestore 서버사이드 필터링
 export async function hasAutoAssignmentToday(classCode, forceRefresh = false) {
   try {
     // classCode 유효성 검사
@@ -315,12 +315,12 @@ export async function hasAutoAssignmentToday(classCode, forceRefresh = false) {
     if (!forceRefresh) {
       const cached = autoAssignmentTodayCache.get(classCode);
       if (cached && cached.date === today) {
-        devLog(`[📊 DB읽기] hasAutoAssignmentToday 캐시 히트`);
+        devLog(`[ DB읽기] hasAutoAssignmentToday 캐시 히트`);
         return cached.result;
       }
     }
 
-    // 🚀 오늘 날짜 범위 계산 (KST 기준 00:00 ~ 23:59를 UTC로 변환)
+    // 오늘 날짜 범위 계산 (KST 기준 00:00 ~ 23:59를 UTC로 변환)
     const todayStart = `${today}T00:00:00+09:00`;
     const todayEnd = `${today}T23:59:59+09:00`;
     // ISO 문자열로 변환 (Firestore 비교용)
@@ -330,9 +330,9 @@ export async function hasAutoAssignmentToday(classCode, forceRefresh = false) {
     devLog(`[스케줄러] 검색 범위: ${todayStartUTC} ~ ${todayEndUTC}`);
 
     devLog(
-      `[📊 DB읽기] hasAutoAssignmentToday DB 조회 - classCode: ${classCode}`,
+      `[ DB읽기] hasAutoAssignmentToday DB 조회 - classCode: ${classCode}`,
     );
-    // 🚀 Firestore에서 직접 필터링 (클라이언트 필터링 제거)
+    // Firestore에서 직접 필터링 (클라이언트 필터링 제거)
     const q = query(
       collection(db, "autoAssignmentLogs"),
       where("classCode", "==", classCode),
@@ -360,7 +360,7 @@ export function invalidateAutoAssignmentCache(classCode) {
 }
 
 // 스케줄 실행 (클라이언트에서 호출 - 페이지 로드시 체크)
-// 🚀 최적화: cachedSettings 파라미터 추가 - 이미 로드된 설정 전달 시 DB 조회 절약
+// 최적화: cachedSettings 파라미터 추가 - 이미 로드된 설정 전달 시 DB 조회 절약
 export async function checkAndRunScheduler(
   classCode,
   gradeLevel,
@@ -368,7 +368,7 @@ export async function checkAndRunScheduler(
   cachedSettings = null,
 ) {
   try {
-    // 🚀 캐시된 설정이 있으면 사용, 없으면 DB 조회
+    // 캐시된 설정이 있으면 사용, 없으면 DB 조회
     const settings = cachedSettings || (await getSchedulerSettings(classCode));
 
     devLog(`[스케줄러] 체크 시작 - classCode: ${classCode}`);

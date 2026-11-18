@@ -21,17 +21,17 @@ import { MAX_STUDENTS_PER_CLASS } from '../config/auth';
 const devLog = import.meta.env.DEV ? console.log.bind(console) : () => {};
 
 // ============================================
-// 🚀 캐싱 시스템 - Firestore 읽기 최적화 (10,000명 대응)
+// 캐싱 시스템 - Firestore 읽기 최적화 (10,000명 대응)
 // ============================================
 const studentDetailsCache = new Map(); // studentIds key -> { data, timestamp }
 const classCache = new Map(); // classCode -> { data, timestamp }
 const teacherClassesCache = new Map(); // teacherId -> { data, timestamp }
 
-// 🚀 캐시 TTL 극대화 (100,000명 대응) - 비용 최적화
+// 캐시 TTL 극대화 (100,000명 대응) - 비용 최적화
 const CACHE_TTL = {
-  studentDetails: 7200000, // 🔥 2시간 - 학생 정보는 거의 변경 안됨
-  classData: 7200000,      // 🔥 2시간 - 반 정보는 거의 변경 안됨 (변경 시 무효화)
-  teacherClasses: 7200000, // 🔥 2시간 - 선생님 학급은 거의 변경 안됨
+  studentDetails: 7200000, // 2시간 - 학생 정보는 거의 변경 안됨
+  classData: 7200000,      // 2시간 - 반 정보는 거의 변경 안됨 (변경 시 무효화)
+  teacherClasses: 7200000, // 2시간 - 선생님 학급은 거의 변경 안됨
 };
 
 // LocalStorage 키 접두사
@@ -44,7 +44,7 @@ function isCacheValid(timestamp, ttl) {
   return (Date.now() - timestamp) < (ttl + jitter);
 }
 
-// 🔥 LocalStorage에 클래스 데이터 저장
+// LocalStorage에 클래스 데이터 저장
 function saveToLocalStorage(key, data) {
   try {
     const item = { data, timestamp: Date.now() };
@@ -52,7 +52,7 @@ function saveToLocalStorage(key, data) {
   } catch (e) { if (import.meta.env.DEV) console.warn('localStorage error:', e.message); }
 }
 
-// 🔥 LocalStorage에서 클래스 데이터 로드
+// LocalStorage에서 클래스 데이터 로드
 function loadFromLocalStorage(key, ttl) {
   try {
     const item = localStorage.getItem(LS_PREFIX + key);
@@ -122,35 +122,35 @@ export async function createClass(teacherId, className, gradeLevel, description 
   }
 }
 
-// 🚀 최적화: 캐싱 추가 (메모리 + LocalStorage 이중 캐시)
-// 🔧 에러 핸들링 강화 - 에러 발생해도 앱이 중단되지 않도록
+// 최적화: 캐싱 추가 (메모리 + LocalStorage 이중 캐시)
+// 에러 핸들링 강화 - 에러 발생해도 앱이 중단되지 않도록
 export async function getClassByCode(classCode, forceRefresh = false) {
   try {
-    // 🔧 classCode 유효성 검사
+    // classCode 유효성 검사
     if (!classCode || typeof classCode !== 'string') {
       console.warn('getClassByCode: 유효하지 않은 classCode:', classCode);
       return null;
     }
 
-    // 🔥 1. 메모리 캐시 확인
+    // 1. 메모리 캐시 확인
     if (!forceRefresh) {
       const cached = classCache.get(classCode);
       if (cached && isCacheValid(cached.timestamp, CACHE_TTL.classData)) {
-        devLog(`[📊 DB읽기] getClassByCode 메모리 캐시 히트 - ${classCode}`);
+        devLog(`[ DB읽기] getClassByCode 메모리 캐시 히트 - ${classCode}`);
         return cached.data;
       }
 
-      // 🔥 2. LocalStorage 캐시 확인
+      // 2. LocalStorage 캐시 확인
       const lsData = loadFromLocalStorage(classCode, CACHE_TTL.classData);
       if (lsData) {
-        devLog(`[📊 DB읽기] getClassByCode LocalStorage 캐시 히트 - ${classCode}`);
+        devLog(`[ DB읽기] getClassByCode LocalStorage 캐시 히트 - ${classCode}`);
         classCache.set(classCode, { data: lsData, timestamp: Date.now() });
         return lsData;
       }
     }
 
-    // 🔥 3. DB에서 조회 (캐시 미스 시에만)
-    devLog(`[📊 DB읽기] getClassByCode DB 조회 - classCode: ${classCode}`);
+    // 3. DB에서 조회 (캐시 미스 시에만)
+    devLog(`[ DB읽기] getClassByCode DB 조회 - classCode: ${classCode}`);
     const classDoc = await getDoc(doc(db, 'classes', classCode));
     const result = classDoc.exists() ? { ...classDoc.data(), classCode } : null;
 
@@ -163,42 +163,42 @@ export async function getClassByCode(classCode, forceRefresh = false) {
     return result;
   } catch (error) {
     console.error('학급 조회 에러:', error);
-    // 🔧 에러 시 null 반환 (앱 중단 방지)
+    // 에러 시 null 반환 (앱 중단 방지)
     return null;
   }
 }
 
-// 🚀 최적화: 캐싱 추가 (메모리 + LocalStorage 이중 캐시)
+// 최적화: 캐싱 추가 (메모리 + LocalStorage 이중 캐시)
 export async function getTeacherClasses(teacherId, forceRefresh = false) {
   try {
     const cacheKey = `teacher_${teacherId}`;
 
-    // 🔥 1. 메모리 캐시 확인
+    // 1. 메모리 캐시 확인
     if (!forceRefresh) {
       const cached = teacherClassesCache.get(teacherId);
       if (cached && isCacheValid(cached.timestamp, CACHE_TTL.teacherClasses)) {
-        devLog(`[📊 DB읽기] getTeacherClasses 메모리 캐시 히트`);
+        devLog(`[ DB읽기] getTeacherClasses 메모리 캐시 히트`);
         return cached.data;
       }
 
-      // 🔥 2. LocalStorage 캐시 확인
+      // 2. LocalStorage 캐시 확인
       const lsData = loadFromLocalStorage(cacheKey, CACHE_TTL.teacherClasses);
       if (lsData) {
-        devLog(`[📊 DB읽기] getTeacherClasses LocalStorage 캐시 히트`);
+        devLog(`[ DB읽기] getTeacherClasses LocalStorage 캐시 히트`);
         teacherClassesCache.set(teacherId, { data: lsData, timestamp: Date.now() });
         return lsData;
       }
     }
 
-    // 🔥 3. DB에서 조회 (캐시 미스 시에만)
-    devLog(`[📊 DB읽기] getTeacherClasses DB 조회 - teacherId: ${teacherId}`);
+    // 3. DB에서 조회 (캐시 미스 시에만)
+    devLog(`[ DB읽기] getTeacherClasses DB 조회 - teacherId: ${teacherId}`);
     const q = query(collection(db, 'classes'), where('teacherId', '==', teacherId), limit(50));
     const querySnapshot = await getDocs(q);
     const classes = [];
     querySnapshot.forEach((docSnap) => {
       classes.push({ ...docSnap.data(), classCode: docSnap.id });
     });
-    devLog(`[📊 DB읽기] getTeacherClasses 결과 - ${classes.length}개 클래스 로드됨`);
+    devLog(`[ DB읽기] getTeacherClasses 결과 - ${classes.length}개 클래스 로드됨`);
 
     // 메모리 + LocalStorage 이중 캐시 저장
     teacherClassesCache.set(teacherId, { data: classes, timestamp: Date.now() });
@@ -246,7 +246,7 @@ export async function joinClass(classCode, studentId, studentName) {
       classCode
     });
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateClassCache(classCode);
 
     return classData;
@@ -281,7 +281,7 @@ export async function removeStudentFromClass(classCode, studentId) {
       classCode: null
     });
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateClassCache(classCode);
 
     return true;
@@ -302,7 +302,7 @@ export async function deleteClass(classCode) {
 
     const classData = classDoc.data();
 
-    // 🚀 모든 학생의 classCode 병렬 제거 (최적화)
+    // 모든 학생의 classCode 병렬 제거 (최적화)
     await Promise.all(
       classData.students.map(student =>
         updateDoc(doc(db, 'users', student.studentId), { classCode: null })
@@ -312,7 +312,7 @@ export async function deleteClass(classCode) {
     // 학급 삭제
     await deleteDoc(classRef);
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateClassCache(classCode);
     invalidateTeacherClassesCache(classData.teacherId);
 
@@ -324,7 +324,7 @@ export async function deleteClass(classCode) {
 }
 
 // 학생 상세 정보 조회 (이메일 포함)
-// 🚀 최적화: N+1 쿼리 대신 배치 쿼리 + 캐싱
+// 최적화: N+1 쿼리 대신 배치 쿼리 + 캐싱
 export async function getStudentDetails(studentIds, forceRefresh = false) {
   try {
     if (!studentIds || studentIds.length === 0) {
@@ -340,7 +340,7 @@ export async function getStudentDetails(studentIds, forceRefresh = false) {
       return cached.data;
     }
 
-    // 🚀 Firestore 'in' 쿼리 최대 30개까지 지원 (배치 크기 증가)
+    // Firestore 'in' 쿼리 최대 30개까지 지원 (배치 크기 증가)
     const batchSize = 30;
     const batches = [];
 

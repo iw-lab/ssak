@@ -1,3 +1,4 @@
+import Emo from "./Emo.jsx";
 import { useState } from "react";
 
 /**
@@ -29,7 +30,7 @@ export default function PrivacyConsent({ onConsent, userName }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* 헤더 */}
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-6 rounded-t-2xl">
+        <div className="bg-emerald-500 text-white p-6 rounded-t-2xl">
           <h2 className="text-2xl font-bold">개인정보 처리 동의</h2>
           <p className="text-emerald-100 mt-1">
             {userName ? `${userName}님, ` : ""}ISW 글쓰기 도우미 이용을 위해
@@ -201,7 +202,7 @@ export default function PrivacyConsent({ onConsent, userName }) {
                   </ul>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-amber-800 font-medium">⚠️ 중요 안내</p>
+                  <p className="text-amber-800 font-medium"><Emo n="AlertTriangle" /> 중요 안내</p>
                   <p className="text-amber-700 mt-1">
                     글에 개인정보(주소, 전화번호, 가족 이름 등)를 포함하지
                     않도록 주의해주세요.
@@ -267,7 +268,7 @@ export default function PrivacyConsent({ onConsent, userName }) {
               disabled={!canProceed}
               className={`flex-1 py-3 rounded-xl font-bold transition-all ${
                 canProceed
-                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 shadow-lg"
+                  ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >

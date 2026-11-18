@@ -195,7 +195,7 @@ export async function getUserData(uid, forceRefresh = false) {
 export async function updateUserData(uid, data) {
   try {
     await updateDoc(doc(db, 'users', uid), data);
-    // 🚀 캐시 무효화 - 업데이트 후 캐시 갱신
+    // 캐시 무효화 - 업데이트 후 캐시 갱신
     invalidateUserCache(uid);
   } catch (error) {
     console.error('사용자 정보 업데이트 에러:', error);

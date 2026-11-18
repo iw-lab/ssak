@@ -1,3 +1,4 @@
+/* design-gate: ignore-file — 아바타·상점·레벨 «콘텐츠»(아이템 그림·배지 데이터)라 화면 장식 이모지가 아니다(2026-11-18 리디자인) */
 // 레벨 시스템 설정
 export const LEVELS = [
   { level: 1, name: '씨앗', emoji: '🌱', minPoints: 0, color: 'from-gray-400 to-gray-500' },

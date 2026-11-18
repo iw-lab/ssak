@@ -4,12 +4,12 @@ import { db } from '../config/firebase';
 const devLog = import.meta.env.DEV ? console.log.bind(console) : () => {};
 
 // ============================================
-// 🚀 캐싱 시스템 - Firestore 읽기 최적화
+// 캐싱 시스템 - Firestore 읽기 최적화
 // ============================================
 const assignmentsCache = new Map(); // classCode -> { data, timestamp }
 const studentAssignmentsCache = new Map(); // classCode -> { data, timestamp } (submissions 제외)
 const submissionsCache = new Map(); // key -> { data, timestamp }
-const pendingRequests = new Map(); // 🚀 진행 중인 요청 추적 (중복 호출 방지)
+const pendingRequests = new Map(); // 진행 중인 요청 추적 (중복 호출 방지)
 
 const MAX_CACHE_SIZE = 100;
 
@@ -27,10 +27,10 @@ function evictIfNeeded(map, maxSize = MAX_CACHE_SIZE) {
   }
 }
 
-// 🚀 캐시 TTL 극대화 (100,000명 대응) - 비용 최적화
+// 캐시 TTL 극대화 (100,000명 대응) - 비용 최적화
 const CACHE_TTL = {
-  assignments: 7200000,  // 🔥 2시간 - 과제는 자주 변경 안됨 (생성/삭제 시 무효화)
-  submissions: 600000    // 🔥 10분 - 제출물은 새 제출 확인 필요
+  assignments: 7200000,  // 2시간 - 과제는 자주 변경 안됨 (생성/삭제 시 무효화)
+  submissions: 600000    // 10분 - 제출물은 새 제출 확인 필요
 };
 
 const LS_PREFIX = 'ssak_assign_';
@@ -42,7 +42,7 @@ function isCacheValid(timestamp, ttl) {
   return (Date.now() - timestamp) < (ttl + jitter);
 }
 
-// 🔥 LocalStorage에 과제 데이터 저장
+// LocalStorage에 과제 데이터 저장
 function saveToLocalStorage(key, data) {
   try {
     const item = { data, timestamp: Date.now() };
@@ -50,7 +50,7 @@ function saveToLocalStorage(key, data) {
   } catch (e) { if (import.meta.env.DEV) console.warn('localStorage error:', e.message); }
 }
 
-// 🔥 LocalStorage에서 과제 데이터 로드
+// LocalStorage에서 과제 데이터 로드
 function loadFromLocalStorage(key, ttl) {
   try {
     const item = localStorage.getItem(LS_PREFIX + key);
@@ -111,13 +111,13 @@ export async function createAssignment(teacherId, classCode, title, description,
       createdAt
     };
 
-    // 🚀 classes 문서에 과제 요약 추가 (학생용 - DB 읽기 0회)
+    // classes 문서에 과제 요약 추가 (학생용 - DB 읽기 0회)
     try {
       await updateDoc(doc(db, 'classes', classCode), {
         assignmentSummary: arrayUnion(newAssignmentSummary)
       });
 
-      // 🚀 해당 학급의 모든 학생 classInfo.assignmentSummary도 업데이트
+      // 해당 학급의 모든 학생 classInfo.assignmentSummary도 업데이트
       // (비동기로 처리하여 메인 플로우 차단 방지)
       (async () => {
         try {
@@ -128,7 +128,7 @@ export async function createAssignment(teacherId, classCode, title, description,
           );
           const studentsSnapshot = await getDocs(studentsQuery);
 
-          // 🚀 batch 크기 제한 (Firestore 500개 제한)
+          // batch 크기 제한 (Firestore 500개 제한)
           const batchSize = 400;
           const students = [];
           studentsSnapshot.forEach(doc => students.push(doc));
@@ -147,7 +147,7 @@ export async function createAssignment(teacherId, classCode, title, description,
             });
             await batch.commit();
           }
-          devLog(`[📊 동기화] 학생 ${studentsSnapshot.size}명의 classInfo.assignmentSummary 업데이트`);
+          devLog(`[ 동기화] 학생 ${studentsSnapshot.size}명의 classInfo.assignmentSummary 업데이트`);
         } catch (syncError) {
           console.warn('학생 classInfo 동기화 실패:', syncError);
         }
@@ -156,7 +156,7 @@ export async function createAssignment(teacherId, classCode, title, description,
       console.warn('과제 요약 추가 실패 (classes 문서):', e);
     }
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateAssignmentsCache(classCode);
     return { id: docRef.id, ...assignment };
   } catch (error) {
@@ -165,49 +165,49 @@ export async function createAssignment(teacherId, classCode, title, description,
   }
 }
 
-// 🚀 최적화: 캐싱 + 정렬을 Firestore에서 처리 + 중복 요청 방지 (메모리 + LocalStorage 이중 캐시)
-// 🔧 에러 핸들링 강화 - 에러 발생해도 앱이 중단되지 않도록
+// 최적화: 캐싱 + 정렬을 Firestore에서 처리 + 중복 요청 방지 (메모리 + LocalStorage 이중 캐시)
+// 에러 핸들링 강화 - 에러 발생해도 앱이 중단되지 않도록
 export async function getAssignmentsByClass(classCode, forceRefresh = false) {
   try {
-    // 🔧 classCode 유효성 검사
+    // classCode 유효성 검사
     if (!classCode || typeof classCode !== 'string') {
       console.warn('getAssignmentsByClass: 유효하지 않은 classCode:', classCode);
       return [];
     }
 
-    // 🔥 1. 메모리 캐시 확인
+    // 1. 메모리 캐시 확인
     if (!forceRefresh) {
       const cached = assignmentsCache.get(classCode);
       if (cached && isCacheValid(cached.timestamp, CACHE_TTL.assignments)) {
-        devLog(`[📊 DB읽기] getAssignmentsByClass 메모리 캐시 히트 - ${cached.data.length}개 과제`);
+        devLog(`[ DB읽기] getAssignmentsByClass 메모리 캐시 히트 - ${cached.data.length}개 과제`);
         return cached.data;
       }
 
-      // 🔥 2. LocalStorage 캐시 확인
+      // 2. LocalStorage 캐시 확인
       const lsData = loadFromLocalStorage(classCode, CACHE_TTL.assignments);
       if (lsData) {
-        devLog(`[📊 DB읽기] getAssignmentsByClass LocalStorage 캐시 히트 - ${lsData.length}개 과제`);
+        devLog(`[ DB읽기] getAssignmentsByClass LocalStorage 캐시 히트 - ${lsData.length}개 과제`);
         assignmentsCache.set(classCode, { data: lsData, timestamp: Date.now() });
         evictIfNeeded(assignmentsCache);
         return lsData;
       }
     }
 
-    // 🚀 진행 중인 요청이 있으면 그 결과를 기다림 (중복 호출 방지)
+    // 진행 중인 요청이 있으면 그 결과를 기다림 (중복 호출 방지)
     const pendingKey = `assignments_${classCode}`;
     if (pendingRequests.has(pendingKey)) {
-      devLog(`[📊 DB읽기] getAssignmentsByClass 진행 중인 요청 대기 - classCode: ${classCode}`);
+      devLog(`[ DB읽기] getAssignmentsByClass 진행 중인 요청 대기 - classCode: ${classCode}`);
       return pendingRequests.get(pendingKey);
     }
 
-    // 🔥 3. DB에서 조회 (캐시 미스 시에만)
+    // 3. DB에서 조회 (캐시 미스 시에만)
     const requestPromise = (async () => {
-      devLog(`[📊 DB읽기] getAssignmentsByClass DB 조회 - classCode: ${classCode}`);
+      devLog(`[ DB읽기] getAssignmentsByClass DB 조회 - classCode: ${classCode}`);
       const q = query(
         collection(db, 'assignments'),
         where('classCode', '==', classCode),
         orderBy('createdAt', 'desc'),
-        limit(100) // 🚀 최대 100개로 증가 (50개 → 100개)
+        limit(100) // 최대 100개로 증가 (50개 → 100개)
       );
       const snapshot = await getDocs(q);
       const assignments = [];
@@ -215,7 +215,7 @@ export async function getAssignmentsByClass(classCode, forceRefresh = false) {
         const data = docSnap.data();
         assignments.push({ id: docSnap.id, ...data });
       });
-      devLog(`[📊 DB읽기] getAssignmentsByClass - ${assignments.length}개 과제 로드`);
+      devLog(`[ DB읽기] getAssignmentsByClass - ${assignments.length}개 과제 로드`);
 
       // 메모리 + LocalStorage 이중 캐시 저장
       assignmentsCache.set(classCode, {
@@ -240,12 +240,12 @@ export async function getAssignmentsByClass(classCode, forceRefresh = false) {
     }
   } catch (error) {
     console.error('과제 목록 로드 에러:', error);
-    // 🔧 에러 시 빈 배열 반환 (앱 중단 방지)
+    // 에러 시 빈 배열 반환 (앱 중단 방지)
     return [];
   }
 }
 
-// 🚀 학생용 과제 목록 - classes 문서의 요약 정보 사용 (DB 읽기 0회!)
+// 학생용 과제 목록 - classes 문서의 요약 정보 사용 (DB 읽기 0회!)
 // classInfo에서 assignmentSummary를 추출해서 사용
 export function getAssignmentsFromClassInfo(classInfo) {
   if (!classInfo || !classInfo.assignmentSummary) {
@@ -257,7 +257,7 @@ export function getAssignmentsFromClassInfo(classInfo) {
   );
 }
 
-// 🚀 기존 classes에 assignmentSummary 마이그레이션
+// 기존 classes에 assignmentSummary 마이그레이션
 export async function migrateAssignmentSummary(classCode) {
   try {
     // classes 문서 확인
@@ -266,7 +266,7 @@ export async function migrateAssignmentSummary(classCode) {
 
     const classData = classDoc.data();
 
-    // 🚀 description과 minScore 필드가 있는지 확인 (v4 업그레이드)
+    // description과 minScore 필드가 있는지 확인 (v4 업그레이드)
     const hasAllFields = classData.assignmentSummary &&
       classData.assignmentSummary.length > 0 &&
       classData.assignmentSummary[0].description !== undefined &&
@@ -296,7 +296,7 @@ export async function migrateAssignmentSummary(classCode) {
       summary.push({
         id: docSnap.id,
         title: data.title,
-        description: data.description || '',  // 🚀 설명 추가
+        description: data.description || '',  // 설명 추가
         minScore: data.minScore || 70,
         createdAt: data.createdAt
       });
@@ -319,7 +319,7 @@ export async function deleteAssignment(assignmentId, classCode = null, assignmen
   try {
     await deleteDoc(doc(db, 'assignments', assignmentId));
 
-    // 🚀 classes 문서에서 과제 요약 제거
+    // classes 문서에서 과제 요약 제거
     if (classCode) {
       try {
         const classDoc = await getDoc(doc(db, 'classes', classCode));
@@ -333,7 +333,7 @@ export async function deleteAssignment(assignmentId, classCode = null, assignmen
               assignmentSummary: filtered
             });
 
-            // 🚀 해당 학급의 모든 학생 classInfo.assignmentSummary도 업데이트
+            // 해당 학급의 모든 학생 classInfo.assignmentSummary도 업데이트
             // (비동기로 처리하여 메인 플로우 차단 방지)
             (async () => {
               try {
@@ -344,7 +344,7 @@ export async function deleteAssignment(assignmentId, classCode = null, assignmen
                 );
                 const studentsSnapshot = await getDocs(studentsQuery);
 
-                // 🚀 batch 크기 제한 (Firestore 500개 제한)
+                // batch 크기 제한 (Firestore 500개 제한)
                 const batchSize = 400;
                 const students = [];
                 studentsSnapshot.forEach(doc => students.push(doc));
@@ -362,7 +362,7 @@ export async function deleteAssignment(assignmentId, classCode = null, assignmen
                   });
                   await batch.commit();
                 }
-                devLog(`[📊 동기화] 학생 ${studentsSnapshot.size}명의 classInfo.assignmentSummary 업데이트`);
+                devLog(`[ 동기화] 학생 ${studentsSnapshot.size}명의 classInfo.assignmentSummary 업데이트`);
               } catch (syncError) {
                 console.warn('학생 classInfo 동기화 실패:', syncError);
               }
@@ -393,7 +393,7 @@ export async function submitAssignment(studentId, studentName, assignmentId, con
     };
 
     const docRef = await addDoc(collection(db, 'submissions'), submission);
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateSubmissionsCache(`assignment_${assignmentId}`);
     invalidateSubmissionsCache(`student_${studentId}`);
     return { id: docRef.id, ...submission };
@@ -403,7 +403,7 @@ export async function submitAssignment(studentId, studentName, assignmentId, con
   }
 }
 
-// 🚀 최적화: 캐싱 + 페이지네이션
+// 최적화: 캐싱 + 페이지네이션
 export async function getSubmissionsByAssignment(assignmentId, forceRefresh = false) {
   try {
     const cacheKey = `assignment_${assignmentId}`;
@@ -437,7 +437,7 @@ export async function getSubmissionsByAssignment(assignmentId, forceRefresh = fa
   }
 }
 
-// 🚀 최적화: 캐싱 + 페이지네이션
+// 최적화: 캐싱 + 페이지네이션
 export async function getSubmissionsByStudent(studentId, forceRefresh = false) {
   try {
     const cacheKey = `student_${studentId}`;
@@ -472,12 +472,12 @@ export async function getSubmissionsByStudent(studentId, forceRefresh = false) {
 }
 
 // ============================================
-// 🚀 assignments.submissions - 제출 현황 관리
+// assignments.submissions - 제출 현황 관리
 // 선생님이 주제 클릭 시 DB 읽기 0회를 위해
 // 제출자 정보를 assignment 문서에 직접 저장
 // ============================================
 
-// 🚀 글 제출 시 assignment에 제출자 정보 추가/업데이트
+// 글 제출 시 assignment에 제출자 정보 추가/업데이트
 // 목표점수 이상인 글만 추가됨
 export async function updateAssignmentSubmission(classCode, topic, submissionInfo) {
   devLog(`[submissions] updateAssignmentSubmission 호출 - classCode: ${classCode}, topic: "${topic}"`);
@@ -503,7 +503,7 @@ export async function updateAssignmentSubmission(classCode, topic, submissionInf
     const minScore = assignmentData.minScore || 70;
     const submissions = assignmentData.submissions || [];
 
-    // 🚀 목표점수 미달이면 submissions에서 제거만 하고 추가하지 않음
+    // 목표점수 미달이면 submissions에서 제거만 하고 추가하지 않음
     const filteredSubmissions = submissions.filter(
       s => s.studentId !== submissionInfo.studentId
     );
@@ -528,7 +528,7 @@ export async function updateAssignmentSubmission(classCode, topic, submissionInf
       submissions: filteredSubmissions
     });
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateAssignmentsCache(classCode);
 
     return true;
@@ -538,7 +538,7 @@ export async function updateAssignmentSubmission(classCode, topic, submissionInf
   }
 }
 
-// 🚀 글 삭제 시 assignment에서 제출자 정보 제거
+// 글 삭제 시 assignment에서 제출자 정보 제거
 export async function removeAssignmentSubmission(classCode, topic, writingId) {
   try {
     const q = query(
@@ -564,7 +564,7 @@ export async function removeAssignmentSubmission(classCode, topic, writingId) {
       submissions: filteredSubmissions
     });
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateAssignmentsCache(classCode);
 
     return true;
@@ -574,7 +574,7 @@ export async function removeAssignmentSubmission(classCode, topic, writingId) {
   }
 }
 
-// 🚀 주제 전체 글 삭제 시 submissions 전체 제거
+// 주제 전체 글 삭제 시 submissions 전체 제거
 export async function clearAssignmentSubmissions(classCode, topic) {
   try {
     const q = query(
@@ -594,7 +594,7 @@ export async function clearAssignmentSubmissions(classCode, topic) {
       submissions: []
     });
 
-    // 🚀 캐시 무효화
+    // 캐시 무효화
     invalidateAssignmentsCache(classCode);
 
     return true;
@@ -605,7 +605,7 @@ export async function clearAssignmentSubmissions(classCode, topic) {
 }
 
 // ============================================
-// 🚀 마이그레이션: 기존 writings에서 submissions 데이터 복원
+// 마이그레이션: 기존 writings에서 submissions 데이터 복원
 // 기존 과제에 submissions 필드가 없는 경우 사용
 // ============================================
 export async function migrateAssignmentSubmissions(classCode) {
@@ -640,7 +640,7 @@ export async function migrateAssignmentSubmissions(classCode) {
     );
     const writingsSnapshot = await getDocs(writingsQuery);
 
-    // 🚀 3. 학생 ID 수집 및 users 컬렉션에서 닉네임 조회
+    // 3. 학생 ID 수집 및 users 컬렉션에서 닉네임 조회
     const studentIds = new Set();
     writingsSnapshot.forEach((docSnap) => {
       const data = docSnap.data();
@@ -679,7 +679,7 @@ export async function migrateAssignmentSubmissions(classCode) {
       const topic = data.topic;
       if (!topic) return;
 
-      // 🚀 목표점수 미달 글은 제외
+      // 목표점수 미달 글은 제외
       const minScore = assignmentMinScores.get(topic) || 70;
       if ((data.score || 0) < minScore) {
         return; // 목표점수 미달이면 스킵
@@ -689,7 +689,7 @@ export async function migrateAssignmentSubmissions(classCode) {
         writingsByTopic.set(topic, []);
       }
 
-      // 🚀 닉네임: users 컬렉션에서 가져온 것 우선, 없으면 기존 데이터 사용
+      // 닉네임: users 컬렉션에서 가져온 것 우선, 없으면 기존 데이터 사용
       const nickname = nicknameMap.get(data.studentId) || data.nickname || data.studentName || '익명';
 
       writingsByTopic.get(topic).push({
@@ -712,7 +712,7 @@ export async function migrateAssignmentSubmissions(classCode) {
       const topic = assignmentData.title;
       const existingSubmissions = assignmentData.submissions || [];
 
-      // 🚀 이미 submissions가 있으면 스킵 (정상 동작 중이므로 건드리지 않음)
+      // 이미 submissions가 있으면 스킵 (정상 동작 중이므로 건드리지 않음)
       if (existingSubmissions.length > 0) {
         devLog(`[마이그레이션] "${topic}" - 이미 ${existingSubmissions.length}명 submissions 있음 (스킵)`);
         skippedCount++;

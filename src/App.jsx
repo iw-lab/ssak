@@ -1,3 +1,4 @@
+import Emo from "./components/Emo.jsx";
 import {
   BrowserRouter as Router,
   Routes,
@@ -12,7 +13,7 @@ import { ROLES, SUPER_ADMIN_UID } from "./config/auth";
 import PrivacyConsent from "./components/PrivacyConsent";
 import ErrorBoundary from "./components/ErrorBoundary";
 
-// 🚀 Lazy Loading - 대시보드는 필요할 때만 로드 (초기 로딩 속도 향상)
+// Lazy Loading - 대시보드는 필요할 때만 로드 (초기 로딩 속도 향상)
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const RoleSelection = lazy(() => import("./pages/RoleSelection"));
@@ -23,9 +24,9 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Landing = lazy(() => import("./pages/Landing"));
 
-// 🔥 로딩 컴포넌트 (Suspense fallback)
+// 로딩 컴포넌트 (Suspense fallback)
 const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-cyan-50">
+  <div className="min-h-screen flex items-center justify-center bg-emerald-50">
     <div className="text-center">
       <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
       <p className="text-gray-600 font-medium">페이지 로딩 중...</p>
@@ -130,7 +131,7 @@ function App() {
                       // 거절된 선생님
                       <div className="min-h-screen flex items-center justify-center bg-gray-100">
                         <div className="bg-white p-8 rounded-lg shadow-md max-w-md text-center">
-                          <div className="text-6xl mb-4">😔</div>
+                          <div className="text-6xl mb-4"><Emo n="Frown" /></div>
                           <h2 className="text-2xl font-bold mb-4 text-red-600">
                             가입 요청이 거절되었습니다
                           </h2>
@@ -157,7 +158,7 @@ function App() {
                       // 승인 대기 중
                       <div className="min-h-screen flex items-center justify-center bg-gray-100">
                         <div className="bg-white p-8 rounded-lg shadow-md max-w-md text-center">
-                          <div className="text-6xl mb-4">⏳</div>
+                          <div className="text-6xl mb-4"><Emo n="Hourglass" /></div>
                           <h2 className="text-2xl font-bold mb-4 text-gray-800">
                             승인 대기 중
                           </h2>
@@ -226,9 +227,9 @@ function App() {
             <Route
               path="*"
               element={
-                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-100">
+                <div className="min-h-screen flex items-center justify-center bg-emerald-50">
                   <div className="text-center p-8">
-                    <div className="text-8xl mb-4">🌱</div>
+                    <div className="text-8xl mb-4"><Emo n="Sprout" /></div>
                     <h1 className="text-4xl font-bold text-gray-800 mb-2">
                       404
                     </h1>

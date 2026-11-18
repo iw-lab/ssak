@@ -1,3 +1,4 @@
+import Emo from "../components/Emo.jsx";
 import { useState, useEffect } from "react";
 import {
   collection,
@@ -19,7 +20,7 @@ import { httpsCallable } from "firebase/functions";
 
 const devLog = import.meta.env.DEV ? console.log.bind(console) : () => {};
 
-// 🚀 페이지네이션 설정 (10,000명 대응)
+// 페이지네이션 설정 (10,000명 대응)
 const PAGE_SIZE = 50;
 
 export default function SuperAdminDashboard({ user, userData }) {
@@ -28,20 +29,20 @@ export default function SuperAdminDashboard({ user, userData }) {
   const [activeTab, setActiveTab] = useState("pending");
   const [selectedUsers, setSelectedUsers] = useState(new Set());
 
-  // 🚀 학급별 요약 (최적화: classes 문서만 로드)
+  // 학급별 요약 (최적화: classes 문서만 로드)
   const [classSummaries, setClassSummaries] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [classStudents, setClassStudents] = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
 
-  // 🚀 선생님 수 (classes에서 계산 - 추가 DB 읽기 없음)
+  // 선생님 수 (classes에서 계산 - 추가 DB 읽기 없음)
   const [teacherCount, setTeacherCount] = useState(0);
 
-  // 🚀 선택된 사용자 상세 정보
+  // 선택된 사용자 상세 정보
   const [selectedUserDetail, setSelectedUserDetail] = useState(null);
   const [loadingUserDetail, setLoadingUserDetail] = useState(false);
 
-  // 🚀 거절된 사용자 목록
+  // 거절된 사용자 목록
   const [rejectedUsers, setRejectedUsers] = useState([]);
   const [loadingRejected, setLoadingRejected] = useState(false);
 
@@ -50,15 +51,15 @@ export default function SuperAdminDashboard({ user, userData }) {
     loadData();
   }, []);
 
-  // 🚀 최적화: userData.classesSummary 사용 (DB 읽기 0회!)
+  // 최적화: userData.classesSummary 사용 (DB 읽기 0회!)
   const loadData = async () => {
     setLoading(true);
     try {
-      devLog("[📊 SuperAdmin] 데이터 로드 시작");
+      devLog("[ SuperAdmin] 데이터 로드 시작");
 
-      // 1. 🚀 학급 요약은 userData에서 가져옴 (DB 읽기 0회!)
+      // 1.  학급 요약은 userData에서 가져옴 (DB 읽기 0회!)
       if (userData.classesSummary && userData.classesSummary.length > 0) {
-        devLog("[📊 캐시] userData.classesSummary 사용 (DB 읽기 0회!)");
+        devLog("[ 캐시] userData.classesSummary 사용 (DB 읽기 0회!)");
         const classes = userData.classesSummary;
         setClassSummaries(classes);
 
@@ -71,15 +72,15 @@ export default function SuperAdminDashboard({ user, userData }) {
         });
         setTeacherCount(uniqueTeacherIds.size);
         devLog(
-          `[📊 캐시] 학급 ${classes.length}개, 선생님 ${uniqueTeacherIds.size}명 (캐시에서 로드)`,
+          `[ 캐시] 학급 ${classes.length}개, 선생님 ${uniqueTeacherIds.size}명 (캐시에서 로드)`,
         );
       } else {
         // classesSummary가 없는 경우 (최초 1회만) - DB에서 로드 후 동기화 트리거
-        devLog("[📊 DB읽기] classesSummary 없음 - 동기화 실행");
+        devLog("[ DB읽기] classesSummary 없음 - 동기화 실행");
         try {
           const syncFn = httpsCallable(functions, "syncClassesSummary");
           await syncFn();
-          devLog("[📊 동기화] classesSummary 동기화 완료 - 새로고침 필요");
+          devLog("[ 동기화] classesSummary 동기화 완료 - 새로고침 필요");
 
           // 동기화 후 classes에서 직접 로드 (1회성)
           const classesQuery = query(collection(db, "classes"));
@@ -106,15 +107,15 @@ export default function SuperAdminDashboard({ user, userData }) {
           setClassSummaries(classes);
           setTeacherCount(uniqueTeacherIds.size);
         } catch (syncError) {
-          console.warn("[📊 동기화] 실패:", syncError);
+          console.warn("[ 동기화] 실패:", syncError);
           setClassSummaries([]);
           setTeacherCount(0);
         }
       }
 
       // 2. 승인 대기 선생님 (보통 적음 - 1회 쿼리)
-      // 🔧 수정: rejected가 true인 선생님은 제외
-      devLog("[📊 DB읽기] 승인 대기 선생님 조회");
+      // 수정: rejected가 true인 선생님은 제외
+      devLog("[ DB읽기] 승인 대기 선생님 조회");
       const pendingQuery = query(
         collection(db, "users"),
         where("role", "==", ROLES.TEACHER),
@@ -124,17 +125,17 @@ export default function SuperAdminDashboard({ user, userData }) {
       const pending = [];
       pendingSnapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        // 🔧 rejected된 선생님은 목록에서 제외
+        // rejected된 선생님은 목록에서 제외
         if (!data.rejected) {
           pending.push({ ...data, id: docSnap.id });
         }
       });
       setPendingTeachers(pending);
-      devLog(`[📊 DB읽기] 승인 대기 선생님 ${pending.length}명 로드`);
+      devLog(`[ DB읽기] 승인 대기 선생님 ${pending.length}명 로드`);
 
-      // 🚀 로그인 완료 요약
+      // 로그인 완료 요약
       devLog("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      devLog("[📊 슈퍼관리자 로그인 완료] 총 DB 읽기: 1회");
+      devLog("[ 슈퍼관리자 로그인 완료] 총 DB 읽기: 1회");
       devLog("  - users (승인대기): 1회 쿼리");
       devLog("  - classes: 0회 (userData.classesSummary 캐시 사용)");
       devLog("  - 학생 상세: 0회 (학급 클릭 시 로드)");
@@ -146,7 +147,7 @@ export default function SuperAdminDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 학급 클릭 시 해당 학급 학생들만 로드
+  // 학급 클릭 시 해당 학급 학생들만 로드
   const loadClassStudents = async (classCode) => {
     if (selectedClass === classCode) {
       setSelectedClass(null);
@@ -157,7 +158,7 @@ export default function SuperAdminDashboard({ user, userData }) {
     setLoadingStudents(true);
     setSelectedClass(classCode);
     try {
-      devLog(`[📊 DB읽기] 학급 ${classCode} 학생 조회`);
+      devLog(`[ DB읽기] 학급 ${classCode} 학생 조회`);
       const studentsQuery = query(
         collection(db, "users"),
         where("classCode", "==", classCode),
@@ -169,7 +170,7 @@ export default function SuperAdminDashboard({ user, userData }) {
         students.push({ ...docSnap.data(), id: docSnap.id });
       });
       setClassStudents(students);
-      devLog(`[📊 DB읽기] 학생 ${students.length}명 로드 (학급: ${classCode})`);
+      devLog(`[ DB읽기] 학생 ${students.length}명 로드 (학급: ${classCode})`);
     } catch (error) {
       console.error("학생 로드 에러:", error);
       setClassStudents([]);
@@ -178,7 +179,7 @@ export default function SuperAdminDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 선생님 목록 생성 (classes에서 추출 - DB 읽기 0회!)
+  // 선생님 목록 생성 (classes에서 추출 - DB 읽기 0회!)
   // classSummaries가 변경될 때마다 선생님 목록 자동 생성
   const teachersFromClasses = (() => {
     const teacherMap = new Map();
@@ -194,7 +195,7 @@ export default function SuperAdminDashboard({ user, userData }) {
     return Array.from(teacherMap.values());
   })();
 
-  // 🚀 사용자 상세 정보 로드 (클릭 시)
+  // 사용자 상세 정보 로드 (클릭 시)
   const loadUserDetail = async (userId) => {
     if (selectedUserDetail?.id === userId) {
       setSelectedUserDetail(null);
@@ -203,7 +204,7 @@ export default function SuperAdminDashboard({ user, userData }) {
 
     setLoadingUserDetail(true);
     try {
-      devLog(`[📊 DB읽기] 사용자 상세 조회 - ${userId}`);
+      devLog(`[ DB읽기] 사용자 상세 조회 - ${userId}`);
       const userDoc = await getDoc(doc(db, "users", userId));
       if (userDoc.exists()) {
         setSelectedUserDetail({ ...userDoc.data(), id: userDoc.id });
@@ -253,12 +254,12 @@ export default function SuperAdminDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 거절된 사용자 목록 조회
+  // 거절된 사용자 목록 조회
   const loadRejectedUsers = async () => {
     setLoadingRejected(true);
     try {
-      devLog("[📊 DB읽기] 거절된 사용자 조회");
-      // 🔧 인덱스 없이도 동작하도록 approved=false인 사용자를 가져와서 rejected 필터링
+      devLog("[ DB읽기] 거절된 사용자 조회");
+      // 인덱스 없이도 동작하도록 approved=false인 사용자를 가져와서 rejected 필터링
       const pendingQuery = query(
         collection(db, "users"),
         where("approved", "==", false),
@@ -273,7 +274,7 @@ export default function SuperAdminDashboard({ user, userData }) {
         }
       });
       setRejectedUsers(users);
-      devLog(`[📊 DB읽기] 거절된 사용자 ${users.length}명 로드`);
+      devLog(`[ DB읽기] 거절된 사용자 ${users.length}명 로드`);
       if (users.length === 0) {
         alert("거절된 사용자가 없습니다.");
       }
@@ -285,7 +286,7 @@ export default function SuperAdminDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 거절된 사용자를 학생으로 변경
+  // 거절된 사용자를 학생으로 변경
   const convertRejectedToStudent = async (userId, userName) => {
     if (
       !confirm(
@@ -311,7 +312,7 @@ export default function SuperAdminDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 거절된 사용자를 선생님으로 승인
+  // 거절된 사용자를 선생님으로 승인
   const approveRejectedAsTeacher = async (userId, userName) => {
     if (!confirm(`${userName}님을 선생님으로 승인하시겠습니까?`)) {
       return;
@@ -435,7 +436,7 @@ export default function SuperAdminDashboard({ user, userData }) {
     }
   };
 
-  // 🧪 테스트 학생 지정/해제
+  // 테스트 학생 지정/해제
   const handleToggleTestStudent = async (userId, currentIsTest) => {
     const newIsTest = !currentIsTest;
     const message = newIsTest
@@ -450,7 +451,7 @@ export default function SuperAdminDashboard({ user, userData }) {
       });
       alert(
         newIsTest
-          ? "🧪 테스트 학생으로 지정되었습니다."
+          ? "테스트 학생으로 지정되었습니다."
           : "테스트 학생 지정이 해제되었습니다.",
       );
       if (selectedClass) {
@@ -473,11 +474,11 @@ export default function SuperAdminDashboard({ user, userData }) {
   // 탭 변경 핸들러
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    devLog(`[📊 탭] ${tab} 탭 선택`);
-    // 🚀 선생님 목록은 classes에서 자동 생성되므로 별도 로드 불필요 (DB 읽기 0회)
+    devLog(`[ 탭] ${tab} 탭 선택`);
+    // 선생님 목록은 classes에서 자동 생성되므로 별도 로드 불필요 (DB 읽기 0회)
   };
 
-  // 🚀 classCode 마이그레이션 실행
+  // classCode 마이그레이션 실행
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState(null);
 
@@ -507,13 +508,13 @@ export default function SuperAdminDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 학급 정보 동기화 (선생님 이름 포함)
+  // 학급 정보 동기화 (선생님 이름 포함)
   const [syncing, setSyncing] = useState(false);
 
   const handleSyncClassesSummary = async () => {
     setSyncing(true);
     try {
-      devLog("[📊 동기화] 학급 정보 동기화 시작");
+      devLog("[ 동기화] 학급 정보 동기화 시작");
       const syncFn = httpsCallable(functions, "syncClassesSummary");
       await syncFn();
       alert("동기화 완료! 페이지를 새로고침합니다.");
@@ -526,11 +527,11 @@ export default function SuperAdminDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 중복 미제출글 정리
+  // 중복 미제출글 정리
   const [cleaningDuplicates, setCleaningDuplicates] = useState(false);
   const [cleanupResult, setCleanupResult] = useState(null);
 
-  // 🚀 통과 점수 70점 마이그레이션
+  // 통과 점수 70점 마이그레이션
   const [migratingMinScore, setMigratingMinScore] = useState(false);
   const [minScoreResult, setMinScoreResult] = useState(null);
 
@@ -591,11 +592,11 @@ ${result.data.message}`);
     }
   };
 
-  // 🚀 학급 삭제 (학생 포함, 선생님 제외)
+  // 학급 삭제 (학생 포함, 선생님 제외)
   const [deletingClass, setDeletingClass] = useState(null);
 
   const handleDeleteClass = async (classCode, className, studentCount) => {
-    const confirmMessage = `정말 학급 "${className}" (${classCode})을 삭제하시겠습니까?\n\n⚠️ 경고: 이 작업은 취소할 수 없습니다!\n- 학생 ${studentCount}명의 계정이 완전히 삭제됩니다\n- 해당 학생들의 모든 글이 삭제됩니다\n- 학급의 모든 과제가 삭제됩니다\n- 선생님 계정은 유지됩니다\n\n삭제하려면 학급 코드 "${classCode}"를 입력하세요:`;
+    const confirmMessage = `정말 학급 "${className}" (${classCode})을 삭제하시겠습니까?\n\n 경고: 이 작업은 취소할 수 없습니다!\n- 학생 ${studentCount}명의 계정이 완전히 삭제됩니다\n- 해당 학생들의 모든 글이 삭제됩니다\n- 학급의 모든 과제가 삭제됩니다\n- 선생님 계정은 유지됩니다\n\n삭제하려면 학급 코드 "${classCode}"를 입력하세요:`;
 
     const inputCode = prompt(confirmMessage);
     if (inputCode !== classCode) {
@@ -633,27 +634,27 @@ ${result.data.message}`);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-sky-50">
+      <div className="min-h-screen flex items-center justify-center bg-background via-white to-sky-50">
         <div className="text-xl font-semibold text-gray-700">로딩 중...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-sky-50">
+    <div className="min-h-screen bg-background via-white to-sky-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-indigo-700 via-purple-600 to-sky-500 text-white shadow-lg">
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 text-gray-900 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-start justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-indigo-100">
+            <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
               SSAK Admin
             </p>
             <h1 className="text-2xl font-bold mt-1">싹 - 슈퍼 관리자</h1>
-            <p className="text-sm text-indigo-100 mt-1">{userData.email}</p>
+            <p className="text-sm text-gray-500 mt-1">{userData.email}</p>
           </div>
           <button
             onClick={handleLogout}
-            className="bg-white/20 border border-white/30 text-white px-4 py-2 rounded-xl hover:bg-white/25 transition-colors"
+            className="bg-gray-100 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl hover:bg-gray-200 transition-colors"
           >
             로그아웃
           </button>
@@ -692,13 +693,13 @@ ${result.data.message}`);
 
         {/* Tabs */}
         <div className="mb-6">
-          <nav className="flex space-x-1 sm:space-x-2 bg-white/80 backdrop-blur p-1 sm:p-1.5 rounded-2xl shadow-sm border border-indigo-100 overflow-x-auto">
+          <nav className="grid grid-cols-2 gap-1 sm:flex sm:gap-2 bg-white p-1 sm:p-1.5 rounded-2xl shadow-sm border border-gray-200">
             <button
               onClick={() => handleTabChange("pending")}
               className={`${
                 activeTab === "pending"
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-indigo-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } whitespace-nowrap px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-medium text-sm transition-all`}
             >
               승인 대기 ({pendingTeachers.length})
@@ -707,8 +708,8 @@ ${result.data.message}`);
               onClick={() => handleTabChange("classes")}
               className={`${
                 activeTab === "classes"
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-indigo-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } whitespace-nowrap px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-medium text-sm transition-all`}
             >
               학급 관리 ({classSummaries.length})
@@ -717,8 +718,8 @@ ${result.data.message}`);
               onClick={() => handleTabChange("teachers")}
               className={`${
                 activeTab === "teachers"
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-indigo-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } whitespace-nowrap px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-medium text-sm transition-all`}
             >
               선생님 관리
@@ -727,8 +728,8 @@ ${result.data.message}`);
               onClick={() => handleTabChange("system")}
               className={`${
                 activeTab === "system"
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-indigo-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } whitespace-nowrap px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-medium text-sm transition-all`}
             >
               시스템 관리
@@ -786,7 +787,7 @@ ${result.data.message}`);
           </div>
         )}
 
-        {/* Classes Tab - 🚀 최적화: 학급별 요약만 표시, 클릭 시 학생 로드 */}
+        {/* Classes Tab -  최적화: 학급별 요약만 표시, 클릭 시 학생 로드 */}
         {activeTab === "classes" && (
           <div className="space-y-4">
             <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -969,7 +970,7 @@ ${result.data.message}`);
                                             }
                                           >
                                             {student.isTestStudent
-                                              ? "🧪 테스트"
+                                              ? "테스트"
                                               : "테스트"}
                                           </button>
                                           <button
@@ -1012,7 +1013,7 @@ ${result.data.message}`);
           </div>
         )}
 
-        {/* Teachers Tab - 🚀 classes에서 추출한 데이터 사용 (DB 읽기 0회) */}
+        {/* Teachers Tab -  classes에서 추출한 데이터 사용 (DB 읽기 0회) */}
         {activeTab === "teachers" && (
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
@@ -1378,7 +1379,7 @@ ${result.data.message}`);
               </div>
             </div>
 
-            {/* 🚀 거절된 사용자 관리 */}
+            {/* 거절된 사용자 관리 */}
             <div className="bg-white shadow rounded-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <div>
@@ -1487,11 +1488,11 @@ ${result.data.message}`);
               </div>
             </div>
 
-            {/* 🌱 싹DB 관리 */}
+            {/* 싹DB 관리 */}
             <div className="bg-white shadow rounded-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-900">
-                  🌱 싹DB 관리 (AI 평가 지식베이스)
+                  <Emo n="Sprout" /> 싹DB 관리 (AI 평가 지식베이스)
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
                   학년별 평가 기준과 우수작 예시 관리
@@ -1576,7 +1577,7 @@ ${result.data.message}`);
                 {/* 싹DB JSON 업로드 */}
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                   <h3 className="font-medium text-orange-800 mb-2">
-                    📤 싹DB 데이터 업로드
+                    <Emo n="Upload" /> 싹DB 데이터 업로드
                   </h3>
                   <p className="text-sm text-orange-700 mb-3">
                     로컬 싹DB JSON 파일을 Firestore에 업로드합니다.
@@ -1648,7 +1649,7 @@ ${result.data.message}`);
                                 }
 
                                 alert(
-                                  `✅ ${collection} 업로드 완료!\n총 ${uploaded}개 문서`,
+                                  ` ${collection} 업로드 완료!\n총 ${uploaded}개 문서`,
                                 );
                               } catch (error) {
                                 console.error("업로드 에러:", error);
@@ -1665,7 +1666,7 @@ ${result.data.message}`);
                       ))}
                     </div>
                     <p className="text-xs text-orange-600">
-                      💡 scripts/ssakdb-collections/ 폴더의 JSON 파일을
+                      <Emo n="Lightbulb" /> scripts/ssakdb-collections/ 폴더의 JSON 파일을
                       선택하세요
                     </p>
                   </div>
@@ -1674,7 +1675,7 @@ ${result.data.message}`);
                 {/* 전체 업로드 */}
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <h3 className="font-medium text-red-800 mb-2">
-                    ⚠️ 싹DB 전체 업로드
+                    <Emo n="AlertTriangle" /> 싹DB 전체 업로드
                   </h3>
                   <p className="text-sm text-red-700 mb-3">
                     모든 싹DB 데이터를 일괄 업로드합니다. 기존 데이터는
@@ -1752,7 +1753,7 @@ ${result.data.message}`);
                           await updateMetaFn();
 
                           alert(
-                            `✅ 전체 업로드 완료!\n총 ${totalUploaded}개 문서`,
+                            ` 전체 업로드 완료!\n총 ${totalUploaded}개 문서`,
                           );
                         } catch (error) {
                           console.error("전체 업로드 에러:", error);
@@ -1767,7 +1768,7 @@ ${result.data.message}`);
                     </span>
                   </label>
                   <p className="text-xs text-red-600 mt-2">
-                    💡 scripts/ssakdb-export.json 파일을 선택하세요
+                    <Emo n="Lightbulb" /> scripts/ssakdb-export.json 파일을 선택하세요
                   </p>
                 </div>
 
@@ -1778,14 +1779,14 @@ ${result.data.message}`);
                   </h3>
                   <ul className="text-sm text-gray-600 space-y-1">
                     <li>
-                      ✅ 학년별 평가 루브릭 (rubrics) - 6+1 Trait Writing 기반
+                      <Emo n="CheckCircle2" /> 학년별 평가 루브릭 (rubrics) - 6+1 Trait Writing 기반
                     </li>
-                    <li>✅ 학년별 우수작 예시 (examples) - 상/중/하 수준별</li>
+                    <li><Emo n="CheckCircle2" /> 학년별 우수작 예시 (examples) - 상/중/하 수준별</li>
                     <li>
-                      ✅ 첨삭 패턴 (feedbackPatterns) - 내용/조직/표현/표기
+                      <Emo n="CheckCircle2" /> 첨삭 패턴 (feedbackPatterns) - 내용/조직/표현/표기
                     </li>
                     <li>
-                      ✅ AI 평가 시 자동 참조 (getSsakRubric, getSsakExample)
+                      <Emo n="CheckCircle2" /> AI 평가 시 자동 참조 (getSsakRubric, getSsakExample)
                     </li>
                   </ul>
                 </div>
@@ -1796,7 +1797,7 @@ ${result.data.message}`);
             <div className="bg-white shadow rounded-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-900">
-                  📊 DB 읽기 최적화 현황
+                  <Emo n="BarChart3" /> DB 읽기 최적화 현황
                 </h2>
               </div>
               <div className="px-6 py-4">

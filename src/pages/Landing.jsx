@@ -1,3 +1,4 @@
+import Emo from "../components/Emo.jsx";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 
@@ -13,7 +14,7 @@ export default function Landing() {
       <nav className="fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md z-50 border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-3xl">🌱</span>
+            <span className="text-3xl"><Emo n="Sprout" /></span>
             <span className="text-xl font-bold text-gray-900">
               ISW 글쓰기 도우미
             </span>
@@ -54,7 +55,7 @@ export default function Landing() {
       </nav>
 
       {/* 히어로 섹션 */}
-      <section className="pt-32 pb-20 px-4 bg-gradient-to-br from-emerald-50 via-white to-cyan-50">
+      <section className="pt-32 pb-20 px-4 bg-emerald-50 via-white to-cyan-50">
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -65,7 +66,7 @@ export default function Landing() {
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
                 학생 글쓰기 실력,
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
+                <span className="text-transparent bg-clip-text bg-emerald-500">
                   AI와 함께 성장
                 </span>
               </h1>
@@ -77,7 +78,7 @@ export default function Landing() {
               <div className="flex flex-wrap gap-4">
                 <a
                   href="#contact"
-                  className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-bold text-lg hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg shadow-emerald-500/30"
+                  className="px-8 py-4 bg-emerald-500 text-white rounded-xl font-bold text-lg hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/30"
                 >
                   무료 체험 신청
                 </a>
@@ -160,9 +161,9 @@ export default function Landing() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* 차별점 1 */}
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
+            <div className="bg-emerald-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
               <div className="w-14 h-14 bg-emerald-500 rounded-xl flex items-center justify-center text-2xl mb-6">
-                📚
+                <Emo n="BookOpen" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">
                 6+1 Trait Writing 기반
@@ -172,14 +173,14 @@ export default function Landing() {
                 어휘, 문장 유창성, 규범 등 6가지 영역별 상세 피드백 제공.
               </p>
               <div className="mt-4 text-emerald-600 font-medium">
-                ✓ 교육부 교육과정 연계
+                <Emo n="Check" /> 교육부 교육과정 연계
               </div>
             </div>
 
             {/* 차별점 2 */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
+            <div className="bg-background rounded-2xl p-8 hover:shadow-xl transition-shadow">
               <div className="w-14 h-14 bg-blue-500 rounded-xl flex items-center justify-center text-2xl mb-6">
-                🌱
+                <Emo n="Sprout" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">
                 싹DB - 학년별 평가 기준
@@ -189,14 +190,14 @@ export default function Landing() {
                 학년 수준에 맞는 공정한 평가가 가능합니다.
               </p>
               <div className="mt-4 text-blue-600 font-medium">
-                ✓ 695개 평가 루브릭
+                <Emo n="Check" /> 695개 평가 루브릭
               </div>
             </div>
 
             {/* 차별점 3 */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
+            <div className="bg-background rounded-2xl p-8 hover:shadow-xl transition-shadow">
               <div className="w-14 h-14 bg-purple-500 rounded-xl flex items-center justify-center text-2xl mb-6">
-                🔄
+                <Emo n="RefreshCw" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">
                 무제한 고쳐쓰기
@@ -206,14 +207,14 @@ export default function Landing() {
                 아닌 "성장 중"이라는 메시지를 전달합니다.
               </p>
               <div className="mt-4 text-purple-600 font-medium">
-                ✓ 성장 중심 피드백
+                <Emo n="Check" /> 성장 중심 피드백
               </div>
             </div>
 
             {/* 차별점 4 */}
-            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
+            <div className="bg-orange-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
               <div className="w-14 h-14 bg-orange-500 rounded-xl flex items-center justify-center text-2xl mb-6">
-                🛡️
+                <Emo n="Shield" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">
                 AI 생성 글 감지
@@ -223,14 +224,14 @@ export default function Landing() {
                 차단)로 학습의 진정성을 보장합니다.
               </p>
               <div className="mt-4 text-orange-600 font-medium">
-                ✓ 표절 + AI 생성 이중 감지
+                <Emo n="Check" /> 표절 + AI 생성 이중 감지
               </div>
             </div>
 
             {/* 차별점 5 */}
-            <div className="bg-gradient-to-br from-cyan-50 to-sky-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
+            <div className="bg-background rounded-2xl p-8 hover:shadow-xl transition-shadow">
               <div className="w-14 h-14 bg-cyan-500 rounded-xl flex items-center justify-center text-2xl mb-6">
-                👨‍🏫
+                <Emo n="GraduationCap" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">
                 교사 친화적 관리
@@ -240,14 +241,14 @@ export default function Landing() {
                 최종 점수를 조정하고 피드백을 추가할 수 있습니다.
               </p>
               <div className="mt-4 text-cyan-600 font-medium">
-                ✓ 교사 피드백 추가 기능
+                <Emo n="Check" /> 교사 피드백 추가 기능
               </div>
             </div>
 
             {/* 차별점 6 */}
-            <div className="bg-gradient-to-br from-rose-50 to-red-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
+            <div className="bg-red-50 rounded-2xl p-8 hover:shadow-xl transition-shadow">
               <div className="w-14 h-14 bg-rose-500 rounded-xl flex items-center justify-center text-2xl mb-6">
-                💰
+                <Emo n="Coins" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">
                 합리적인 가격
@@ -257,7 +258,7 @@ export default function Landing() {
                 결정하세요.
               </p>
               <div className="mt-4 text-rose-600 font-medium">
-                ✓ 학생당 비용 X
+                <Emo n="Check" /> 학생당 비용 X
               </div>
             </div>
           </div>
@@ -279,7 +280,7 @@ export default function Landing() {
           <div className="overflow-x-auto">
             <table className="w-full bg-white rounded-2xl shadow-lg overflow-hidden">
               <thead>
-                <tr className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
+                <tr className="bg-emerald-500 text-white">
                   <th className="px-6 py-4 text-left">기능</th>
                   <th className="px-6 py-4 text-center">ISW 글쓰기 도우미</th>
                   <th className="px-6 py-4 text-center text-white/80">
@@ -297,10 +298,10 @@ export default function Landing() {
                 <tr>
                   <td className="px-6 py-4 font-medium">AI 글쓰기 평가</td>
                   <td className="px-6 py-4 text-center text-emerald-600 font-bold">
-                    ✓ 6+1 Trait
+                    <Emo n="Check" /> 6+1 Trait
                   </td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
                   <td className="px-6 py-4 text-center text-gray-400">
                     제한적
                   </td>
@@ -308,10 +309,10 @@ export default function Landing() {
                 <tr className="bg-gray-50">
                   <td className="px-6 py-4 font-medium">학년별 맞춤 평가</td>
                   <td className="px-6 py-4 text-center text-emerald-600 font-bold">
-                    ✓ 초1~고3
+                    <Emo n="Check" /> 초1~고3
                   </td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
                   <td className="px-6 py-4 text-center text-gray-400">
                     초등만
                   </td>
@@ -319,34 +320,34 @@ export default function Landing() {
                 <tr>
                   <td className="px-6 py-4 font-medium">무제한 고쳐쓰기</td>
                   <td className="px-6 py-4 text-center text-emerald-600 font-bold">
-                    ✓
+                    <Emo n="Check" />
                   </td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
                 </tr>
                 <tr className="bg-gray-50">
                   <td className="px-6 py-4 font-medium">AI 생성 글 감지</td>
                   <td className="px-6 py-4 text-center text-emerald-600 font-bold">
-                    ✓
+                    <Emo n="Check" />
                   </td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
                 </tr>
                 <tr>
                   <td className="px-6 py-4 font-medium">표절 감지</td>
                   <td className="px-6 py-4 text-center text-emerald-600 font-bold">
-                    ✓
+                    <Emo n="Check" />
                   </td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
-                  <td className="px-6 py-4 text-center text-gray-400">✗</td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
+                  <td className="px-6 py-4 text-center text-gray-400"><Emo n="X" /></td>
                 </tr>
                 <tr className="bg-gray-50">
                   <td className="px-6 py-4 font-medium">글쓰기 전문 서비스</td>
                   <td className="px-6 py-4 text-center text-emerald-600 font-bold">
-                    ✓ 전문
+                    <Emo n="Check" /> 전문
                   </td>
                   <td className="px-6 py-4 text-center text-gray-400">범용</td>
                   <td className="px-6 py-4 text-center text-gray-400">범용</td>
@@ -443,7 +444,7 @@ export default function Landing() {
             </div>
 
             {/* 기본 */}
-            <div className="bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl p-8 text-white transform scale-105 shadow-xl">
+            <div className="bg-emerald-500 rounded-2xl p-8 text-white transform scale-105 shadow-xl">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-400 text-amber-900 px-4 py-1 rounded-full text-sm font-bold">
                 인기
               </div>
@@ -604,7 +605,7 @@ export default function Landing() {
       {/* 문의 섹션 */}
       <section
         id="contact"
-        className="py-20 px-4 bg-gradient-to-br from-emerald-500 to-teal-600"
+        className="py-20 px-4 bg-emerald-500"
       >
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
@@ -648,7 +649,7 @@ export default function Landing() {
               />
               <button
                 type="submit"
-                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-bold text-lg hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg"
+                className="w-full py-4 bg-emerald-500 text-white rounded-xl font-bold text-lg hover:bg-emerald-600 transition-all shadow-lg"
               >
                 무료 체험 신청하기
               </button>
@@ -666,7 +667,7 @@ export default function Landing() {
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">🌱</span>
+                <span className="text-2xl"><Emo n="Sprout" /></span>
                 <span className="text-white font-bold">ISW 글쓰기 도우미</span>
               </div>
               <p className="text-sm">
@@ -745,8 +746,8 @@ export default function Landing() {
             className="bg-white rounded-2xl max-w-4xl w-full p-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="aspect-video bg-gradient-to-br from-gray-900 via-emerald-950 to-gray-900 rounded-xl flex flex-col items-center justify-center gap-6 p-8">
-              <div className="text-6xl">🌱</div>
+            <div className="aspect-video bg-gray-900 rounded-xl flex flex-col items-center justify-center gap-6 p-8">
+              <div className="text-6xl"><Emo n="Sprout" /></div>
               <h3 className="text-white text-2xl font-bold">
                 싹 AI 글쓰기 플랫폼
               </h3>

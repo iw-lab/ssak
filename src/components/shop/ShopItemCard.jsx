@@ -1,3 +1,4 @@
+import Emo from "../Emo.jsx";
 import { memo } from 'react';
 import { RARITY_CONFIG } from '../../config/shopItems';
 import RarityBadge from './RarityBadge';
@@ -46,12 +47,12 @@ const ShopItemCard = memo(({
 
       {/* 상태 뱃지 */}
       {equipped && (
-        <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md z-10">
+        <div className="absolute top-1.5 right-1.5 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md z-10">
           착용중
         </div>
       )}
       {owned && !equipped && (
-        <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md z-10">
+        <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md z-10">
           보유
         </div>
       )}
@@ -59,14 +60,14 @@ const ShopItemCard = memo(({
       {/* 세트 아이콘 */}
       {item.setId && (
         <div className="absolute top-1 left-1 text-[10px] bg-white/80 backdrop-blur px-1 py-0.5 rounded text-gray-500" title="세트 아이템">
-          🧩
+          <Emo n="Puzzle" />
         </div>
       )}
 
       {/* 아이템 프리뷰 */}
       <div className="flex justify-center mb-2 h-12 items-center">
         {renderPreview ? renderPreview(item) : (
-          <span className="text-3xl">{item.emoji || '🎁'}</span>
+          <span className="text-3xl">{item.emoji || '🎁' /* design-gate: emoji-ok */}</span>
         )}
       </div>
 
@@ -103,7 +104,7 @@ const ShopItemCard = memo(({
               : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
           }`}
         >
-          {previewing ? '👀 미리보기중' : '👀 미리보기'}
+          {previewing ? '미리보기중' : '미리보기'}
         </button>
 
         {/* 장착 / 구매 */}
@@ -117,7 +118,7 @@ const ShopItemCard = memo(({
                 : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-md'
             }`}
           >
-            {equipped ? '✓ 착용중' : '장착'}
+            {equipped ? '착용중' : '장착'}
           </button>
         ) : (
           <button

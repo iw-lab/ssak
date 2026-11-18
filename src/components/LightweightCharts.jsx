@@ -1,5 +1,5 @@
 // ============================================
-// 🚀 경량 차트 컴포넌트 - recharts 대체
+// 경량 차트 컴포넌트 - recharts 대체
 // 번들 크기: recharts 524KB → 이 파일 ~5KB
 // SVG 기반 직접 렌더링
 // ============================================
@@ -7,7 +7,7 @@
 import { useMemo } from "react";
 
 // ============================================
-// 🔧 유틸리티 함수
+// 유틸리티 함수
 // ============================================
 
 // 숫자를 지정된 범위로 매핑
@@ -37,7 +37,7 @@ function generateYTicks(min, max, count = 5) {
 }
 
 // ============================================
-// 📊 LineChart - 꺾은선 그래프
+// LineChart - 꺾은선 그래프
 // ============================================
 export function SimpleLineChart({
   data,
@@ -237,7 +237,7 @@ export function SimpleLineChart({
 }
 
 // ============================================
-// 📊 BarChart - 막대 그래프
+// BarChart - 막대 그래프
 // ============================================
 export function SimpleBarChart({
   data,
@@ -392,7 +392,7 @@ export function SimpleBarChart({
 }
 
 // ============================================
-// 📊 RadarChart - 레이더 차트 (능력치 표시용)
+// RadarChart - 레이더 차트 (능력치 표시용)
 // ============================================
 export function SimpleRadarChart({
   data,
@@ -514,7 +514,7 @@ export function SimpleRadarChart({
 }
 
 // ============================================
-// 📊 ProgressBar - 진행률 바
+// ProgressBar - 진행률 바
 // ============================================
 export function ProgressBar({
   value,
@@ -552,7 +552,7 @@ export function ProgressBar({
 }
 
 // ============================================
-// 📊 DonutChart - 도넛 차트
+// DonutChart - 도넛 차트
 // ============================================
 export function DonutChart({
   value,

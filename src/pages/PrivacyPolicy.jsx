@@ -1,3 +1,4 @@
+import Emo from "../components/Emo.jsx";
 import { Link } from "react-router-dom";
 
 /**
@@ -14,7 +15,7 @@ export default function PrivacyPolicy() {
             to="/"
             className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700"
           >
-            <span className="text-2xl">🌱</span>
+            <span className="text-2xl"><Emo n="Sprout" /></span>
             <span className="font-bold">ISW 글쓰기 도우미</span>
           </Link>
           <Link
@@ -143,7 +144,7 @@ export default function PrivacyPolicy() {
               </h2>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
                 <p className="font-medium text-amber-800">
-                  ⚠️ AI 평가를 위한 데이터 국외 이전 안내
+                  <Emo n="AlertTriangle" /> AI 평가를 위한 데이터 국외 이전 안내
                 </p>
               </div>
               <p className="text-gray-700 leading-relaxed mb-4">

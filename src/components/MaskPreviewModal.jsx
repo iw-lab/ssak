@@ -1,3 +1,4 @@
+import Emo from "./Emo.jsx";
 // 제출 전 «AI 선생님에게 이렇게 보내요» — 서버와 같은 가림 규칙(functions/pii.mjs)으로 미리 보여 주고,
 // 못 가린 낱말은 학생이 눌러서 더 가린다(그 목록이 maskWords 로 서버에 간다 — 서버도 같은 낱말을 가린다).
 // Anthropic 미성년 이용 지침: 사용자에게 «사람이 아니라 AI»임을 알린다.
@@ -25,7 +26,7 @@ export default function MaskPreviewModal({ text, onConfirm, onCancel }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3" role="dialog" aria-modal="true" data-mask-preview>
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white p-4 shadow-xl sm:p-6">
-        <h2 className="text-lg font-bold text-emerald-800">🤖 AI 선생님에게 이렇게 보내요</h2>
+        <h2 className="text-lg font-bold text-emerald-800"><Emo n="Bot" /> AI 선생님에게 이렇게 보내요</h2>
         <p className="mt-1 text-sm text-gray-600">
           AI 선생님은 <b>사람이 아니라 인공지능</b>이에요(미국 회사 Anthropic의 Claude). <b>이름·지역·주소·학교·전화번호는 «ㅇㅇㅇ»로 가려서</b> 보내요.
           아직 보이는 이름이나 사는 곳이 있으면 <b>그 낱말을 눌러</b> 더 가려 주세요.
@@ -40,7 +41,7 @@ export default function MaskPreviewModal({ text, onConfirm, onCancel }) {
           <div className="mt-2 flex flex-wrap gap-1 text-xs" data-mask-extra>
             <span className="text-gray-500">내가 더 가린 낱말:</span>
             {extra.map((w) => (
-              <button type="button" key={w} onClick={() => setExtra((x) => x.filter((y) => y !== w))} className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">{w} ✕</button>
+              <button type="button" key={w} onClick={() => setExtra((x) => x.filter((y) => y !== w))} className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">{w} <Emo n="X" /></button>
             ))}
           </div>
         )}

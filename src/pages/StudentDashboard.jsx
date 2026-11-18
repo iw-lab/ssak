@@ -1,3 +1,5 @@
+import { LogOut } from "lucide-react";
+import Emo from "../components/Emo.jsx";
 import MaskPreviewModal from "../components/MaskPreviewModal";
 import {
   useState,
@@ -8,11 +10,11 @@ import {
   lazy,
   Suspense,
 } from "react";
-// 🚀 useDebounce 제거 - 자동저장 기능 제거로 더 이상 필요 없음
+// useDebounce 제거 - 자동저장 기능 제거로 더 이상 필요 없음
 const Confetti = lazy(() => import("react-confetti"));
 // Dev-only logging (stripped in production builds)
 const devLog = import.meta.env.DEV ? console.log.bind(console) : () => {};
-// 🚀 경량 차트 사용 (recharts 524KB → 5KB)
+// 경량 차트 사용 (recharts 524KB → 5KB)
 import { SimpleLineChart } from "../components/LightweightCharts";
 import { signOut, updateUserData } from "../services/authService";
 import { getClassByCode } from "../services/classService";
@@ -65,7 +67,7 @@ import {
   checkAchievements,
   WRITING_TEMPLATES,
 } from "../config/levels";
-// 🚀 상점 아이템 데이터 분리 (번들 최적화)
+// 상점 아이템 데이터 분리 (번들 최적화)
 import {
   AVATAR_ITEMS,
   ROOM_ITEMS,
@@ -77,7 +79,7 @@ import {
   AVATAR_CATEGORY_MAP,
   ROOM_CATEGORY_MAP,
 } from "../config/shopItems";
-// 🎨 프리미엄 아바타 상점 컴포넌트
+// 프리미엄 아바타 상점 컴포넌트
 const AvatarShop = lazy(() => import("../components/shop/AvatarShop"));
 
 export default function StudentDashboard({ user, userData }) {
@@ -90,7 +92,7 @@ export default function StudentDashboard({ user, userData }) {
   const [assignments, setAssignments] = useState([]);
   const [allAssignments, setAllAssignments] = useState([]); // 모든 과제 저장 (minScore 조회용)
 
-  // 🚀 제출기록 상세 보기 (클릭 시 로드)
+  // 제출기록 상세 보기 (클릭 시 로드)
   const [selectedWritingDetail, setSelectedWritingDetail] = useState(null);
   const [loadingWritingDetail, setLoadingWritingDetail] = useState(false);
 
@@ -102,7 +104,7 @@ export default function StudentDashboard({ user, userData }) {
     studentName: userData.name,
   });
 
-  // 🚀 탭 이동 시 경고창 함수 - 작성 중인 글 보호
+  // 탭 이동 시 경고창 함수 - 작성 중인 글 보호
   const handleTabChange = useCallback(
     (newTab) => {
       // 글쓰기 탭에서 다른 탭으로 이동하려 하고, 작성 중인 글이 있는 경우
@@ -113,12 +115,12 @@ export default function StudentDashboard({ user, userData }) {
         currentWriting.content.trim().length > 0
       ) {
         const confirmMove = window.confirm(
-          `⚠️ 작성 중인 글이 있습니다!\n\n` +
+          ` 작성 중인 글이 있습니다!\n\n` +
             `주제: "${currentWriting.topic || "(주제 미선택)"}"\n` +
             `작성된 글자 수: ${currentWriting.wordCount}자\n\n` +
             `다른 탭으로 이동하면 작성 중인 글이 삭제됩니다.\n` +
             `그래도 이동하시겠습니까?\n\n` +
-            `💡 팁: 글을 유지하려면 '취소'를 누른 후 '제출하기'로 저장하세요.`,
+            ` 팁: 글을 유지하려면 '취소'를 누른 후 '제출하기'로 저장하세요.`,
         );
 
         if (!confirmMove) {
@@ -138,28 +140,28 @@ export default function StudentDashboard({ user, userData }) {
 
       setActiveTab(newTab);
 
-      // 🚀 탭별 DB 읽기 로그
+      // 탭별 DB 읽기 로그
       if (newTab === "statistics") {
-        devLog("[📊 탭] 통계 탭 - DB 읽기 0회 (이미 로드된 stats 사용)");
+        devLog("[ 탭] 통계 탭 - DB 읽기 0회 (이미 로드된 stats 사용)");
       } else if (newTab === "profile") {
-        preloadRoomSVG(); // 🚀 RoomSVG 사전 로드
+        preloadRoomSVG(); // RoomSVG 사전 로드
         devLog(
-          "[📊 탭] 내 프로필 탭 - DB 읽기 0회 (이미 로드된 userData 사용)",
+          "[ 탭] 내 프로필 탭 - DB 읽기 0회 (이미 로드된 userData 사용)",
         );
       } else if (newTab === "ranking") {
-        devLog("[📊 탭] 랭킹 탭 - DB 읽기 0회 (classInfo 캐시 사용)");
+        devLog("[ 탭] 랭킹 탭 - DB 읽기 0회 (classInfo 캐시 사용)");
       } else if (newTab === "history") {
         devLog(
-          "[📊 탭] 제출기록 탭 - DB 읽기 0회 (userData.writingSummary 사용)",
+          "[ 탭] 제출기록 탭 - DB 읽기 0회 (userData.writingSummary 사용)",
         );
       } else if (newTab === "write") {
-        devLog("[📊 탭] 글쓰기 탭 - DB 읽기 0회");
+        devLog("[ 탭] 글쓰기 탭 - DB 읽기 0회");
       }
     },
     [activeTab, currentWriting, userData.gradeLevel, userData.name],
   );
 
-  // 🚀 자동저장 제거 - Firestore 비용 최적화 (주제 이동 시 경고창으로 대체)
+  // 자동저장 제거 - Firestore 비용 최적화 (주제 이동 시 경고창으로 대체)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [selectedTopic, setSelectedTopic] = useState(null);
@@ -169,9 +171,9 @@ export default function StudentDashboard({ user, userData }) {
   const [submittedWriting, setSubmittedWriting] = useState(null);
   const [completedAssignmentsCount, setCompletedAssignmentsCount] = useState(0);
   const [rewriteMode, setRewriteMode] = useState(null); // 고쳐쓰기 모드 - AI 제안 저장
-  const [isProcessingAction, setIsProcessingAction] = useState(false); // 🚀 버튼 중복 클릭 방지
+  const [isProcessingAction, setIsProcessingAction] = useState(false); // 버튼 중복 클릭 방지
 
-  // 🧪 테스트 모드 관련 state
+  // 테스트 모드 관련 state
   const isTestStudent = userData.isTestStudent || false;
   const [testScoreMode, setTestScoreMode] = useState(null); // null: 일반, 'pass': 도달점수, 'fail': 미달점수, 'custom': 직접입력
   const [customTestScore, setCustomTestScore] = useState(75); // 직접 입력 점수
@@ -269,14 +271,14 @@ export default function StudentDashboard({ user, userData }) {
   const [rankingExpanded, setRankingExpanded] = useState(false);
   const [loadingRanking, setLoadingRanking] = useState(false);
   const [myRank, setMyRank] = useState(null);
-  const [rankingLastLoaded, setRankingLastLoaded] = useState(null); // 🚀 캐시 타임스탬프
+  const [rankingLastLoaded, setRankingLastLoaded] = useState(null); // 캐시 타임스탬프
 
   // 닉네임 변경 알림 모달
   const [showNicknameAlert, setShowNicknameAlert] = useState(false);
   const [nicknameAlertInput, setNicknameAlertInput] = useState("");
 
   useEffect(() => {
-    // 🚀 초기 로드 및 새로고침 시에는 DB에서 최신 데이터 가져옴
+    // 초기 로드 및 새로고침 시에는 DB에서 최신 데이터 가져옴
     loadData(true);
     // 음성 인식 지원 확인
     if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
@@ -294,7 +296,7 @@ export default function StudentDashboard({ user, userData }) {
     };
   }, []);
 
-  // 🚀 페이지 로드 시 임시저장 자동 복구 + 예약된 저장 실행
+  // 페이지 로드 시 임시저장 자동 복구 + 예약된 저장 실행
   useEffect(() => {
     const recoverDraft = async () => {
       try {
@@ -320,7 +322,7 @@ export default function StudentDashboard({ user, userData }) {
           }
         }
 
-        // 🚀 1. sessionStorage에서 즉시 복구 (확대/축소, 새로고침 대비 - 확인창 없이!)
+        // 1. sessionStorage에서 즉시 복구 (확대/축소, 새로고침 대비 - 확인창 없이!)
         const sessionDraftKey = `writing_session_${user.uid}`;
         const sessionDraft = sessionStorage.getItem(sessionDraftKey);
         if (sessionDraft) {
@@ -392,7 +394,7 @@ export default function StudentDashboard({ user, userData }) {
           if (minutesAgo < 10 && latestDraft.wordCount >= 10) {
             // 바로 복구하지 않고 사용자에게 확인
             const confirmRecover = window.confirm(
-              `📝 작성 중이던 글이 있습니다!\n\n` +
+              ` 작성 중이던 글이 있습니다!\n\n` +
                 `주제: "${latestDraft.topic}"\n` +
                 `글자 수: ${latestDraft.wordCount}자\n` +
                 `저장 시간: ${minutesAgo}분 전\n\n` +
@@ -425,7 +427,7 @@ export default function StudentDashboard({ user, userData }) {
     return () => clearTimeout(timer);
   }, [user.uid]);
 
-  // 🚀 확대/축소, 탭 전환 시 글 보존 (visibilitychange + resize 이벤트)
+  // 확대/축소, 탭 전환 시 글 보존 (visibilitychange + resize 이벤트)
   useEffect(() => {
     // 현재 작성 중인 글을 sessionStorage에 저장
     const saveToSession = () => {
@@ -504,7 +506,7 @@ export default function StudentDashboard({ user, userData }) {
         event.preventDefault();
         if (
           window.confirm(
-            "⚠️ 작성 중인 글이 있습니다!\n\n뒤로 가면 작성 중인 글이 삭제됩니다.\n그래도 뒤로 가시겠습니까?",
+            "작성 중인 글이 있습니다!\n\n뒤로 가면 작성 중인 글이 삭제됩니다.\n그래도 뒤로 가시겠습니까?",
           )
         ) {
           setCurrentWriting((prev) => ({
@@ -550,7 +552,7 @@ export default function StudentDashboard({ user, userData }) {
     };
   }, [feedback, currentWriting.content, currentWriting.topic, selectedTopic]);
 
-  // 🚀 PC 새로고침/창닫기 시 경고 - 작성 중인 글 보호
+  // PC 새로고침/창닫기 시 경고 - 작성 중인 글 보호
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       // 글쓰기 중인 내용이 있을 때만 경고
@@ -569,7 +571,7 @@ export default function StudentDashboard({ user, userData }) {
     };
   }, [currentWriting.content]);
 
-  // 🚀 페이지 나갈 때 서버 저장 (DB 비용 최적화)
+  // 페이지 나갈 때 서버 저장 (DB 비용 최적화)
   // - 30초마다 저장하면 DB 비용이 크게 증가하므로 제거
   // - 대신 페이지 나갈 때만 서버에 저장
   // - 로컬스토리지 자동저장은 유지 (DB 비용 0)
@@ -673,10 +675,10 @@ export default function StudentDashboard({ user, userData }) {
   }, [userData]);
 
   // 랭킹 탭 선택 시 데이터 로드
-  // 🚀 최적화: classInfo 캐시 사용 (DB 읽기 0회!)
+  // 최적화: classInfo 캐시 사용 (DB 읽기 0회!)
   useEffect(() => {
     if (activeTab === "ranking" && classInfo?.classCode) {
-      // 🚀 캐시 가드: 60초 이내에 로드했으면 재로드하지 않음
+      // 캐시 가드: 60초 이내에 로드했으면 재로드하지 않음
       const now = Date.now();
       if (
         rankingLastLoaded &&
@@ -685,7 +687,7 @@ export default function StudentDashboard({ user, userData }) {
       ) {
         return;
       }
-      // 🚀 classInfo에 랭킹 캐시가 있으면 forceRefresh 불필요 (DB 읽기 0회!)
+      // classInfo에 랭킹 캐시가 있으면 forceRefresh 불필요 (DB 읽기 0회!)
       const rankingField =
         rankingPeriod === "weekly" ? "weeklyRanking" : "monthlyRanking";
       const hasRankingCache = classInfo?.[rankingField]?.data;
@@ -693,18 +695,18 @@ export default function StudentDashboard({ user, userData }) {
     }
   }, [activeTab, classInfo?.classCode, rankingPeriod]);
 
-  // 🚀 랭킹 데이터 로드 함수 - 최적화: classInfo 캐시 사용 (DB 읽기 0회!)
+  // 랭킹 데이터 로드 함수 - 최적화: classInfo 캐시 사용 (DB 읽기 0회!)
   const loadRankingData = async (classCode, period, forceRefresh = false) => {
-    if (loadingRanking) return; // 🔥 동시 로드 방지
+    if (loadingRanking) return; // 동시 로드 방지
 
-    // 🔧 classCode 유효성 검사
+    // classCode 유효성 검사
     if (!classCode) {
       console.warn("랭킹 로드 실패: classCode가 없습니다");
       setRankingData([]);
       return;
     }
 
-    // 🚀 캐시 가드: 강제 새로고침이 아니고 최근 로드했으면 스킵
+    // 캐시 가드: 강제 새로고침이 아니고 최근 로드했으면 스킵
     if (
       !forceRefresh &&
       rankingLastLoaded &&
@@ -715,7 +717,7 @@ export default function StudentDashboard({ user, userData }) {
     }
     setLoadingRanking(true);
     try {
-      // 🚀 classInfo에서 캐시된 랭킹 사용 (DB 읽기 0회!)
+      // classInfo에서 캐시된 랭킹 사용 (DB 읽기 0회!)
       const rankingField =
         period === "weekly" ? "weeklyRanking" : "monthlyRanking";
       let fullRanking = [];
@@ -723,16 +725,16 @@ export default function StudentDashboard({ user, userData }) {
       if (classInfo?.[rankingField]?.data) {
         fullRanking = classInfo[rankingField].data;
         devLog(
-          `[📊 캐시] 랭킹 - classInfo.${rankingField}에서 로드 (DB 읽기 0회)`,
+          `[ 캐시] 랭킹 - classInfo.${rankingField}에서 로드 (DB 읽기 0회)`,
         );
       } else if (forceRefresh) {
         // 강제 새로고침 시에만 DB 조회
-        devLog(`[📊 DB읽기] 랭킹 강제 새로고침 - classCode: ${classCode}`);
+        devLog(`[ DB읽기] 랭킹 강제 새로고침 - classCode: ${classCode}`);
         fullRanking = await getClassRanking(classCode, period, {
           forceRefresh: true,
         });
       } else {
-        devLog(`[📊 캐시] 랭킹 데이터 없음 - 빈 배열 반환`);
+        devLog(`[ 캐시] 랭킹 데이터 없음 - 빈 배열 반환`);
       }
 
       setRankingData(fullRanking);
@@ -942,7 +944,7 @@ export default function StudentDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 제출기록에서 글 클릭 시 상세 정보 로드 (DB 읽기 1회)
+  // 제출기록에서 글 클릭 시 상세 정보 로드 (DB 읽기 1회)
   const handleViewWritingDetail = async (writingId) => {
     if (loadingWritingDetail) return;
 
@@ -954,7 +956,7 @@ export default function StudentDashboard({ user, userData }) {
 
     setLoadingWritingDetail(true);
     try {
-      devLog(`[📊 DB읽기] 제출기록 상세 조회 - writingId: ${writingId}`);
+      devLog(`[ DB읽기] 제출기록 상세 조회 - writingId: ${writingId}`);
       const detail = await getWritingDetail(writingId);
       setSelectedWritingDetail(detail);
     } catch (error) {
@@ -964,9 +966,9 @@ export default function StudentDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 최적화: writings 컬렉션 쿼리 완전 제거! (DB 읽기 76회 → 0회)
+  // 최적화: writings 컬렉션 쿼리 완전 제거! (DB 읽기 76회 → 0회)
   // users 문서의 writingSummary에서 글 목록 가져오기
-  // 🚀 forceRefresh: true면 DB에서 최신 데이터, false면 로컬 userData 사용
+  // forceRefresh: true면 DB에서 최신 데이터, false면 로컬 userData 사용
   const loadData = async (forceRefresh = false) => {
     try {
       let studentWritings = [];
@@ -974,7 +976,7 @@ export default function StudentDashboard({ user, userData }) {
       let cls = null;
       let classAssignments = [];
 
-      // 1. 🚀 users 문서에서 글 요약 가져오기
+      // 1.  users 문서에서 글 요약 가져오기
       let currentUserData = userData;
 
       // 새로고침 시에만 DB에서 최신 데이터 가져옴 (비용 절약!)
@@ -985,16 +987,16 @@ export default function StudentDashboard({ user, userData }) {
         if (userDoc.exists()) {
           currentUserData = userDoc.data();
           devLog(
-            `[📊 DB읽기] users 문서 새로고침 - writingSummary 개수: ${currentUserData.writingSummary?.length || 0}`,
+            `[ DB읽기] users 문서 새로고침 - writingSummary 개수: ${currentUserData.writingSummary?.length || 0}`,
           );
           devLog(
-            `[📊 DB읽기] writingSummary 내용:`,
+            `[ DB읽기] writingSummary 내용:`,
             currentUserData.writingSummary,
           );
         }
       }
 
-      // 🚀 v6: 마이그레이션 완전 제거 - 이미 존재하는 writingSummary를 절대 덮어쓰지 않음
+      // v6: 마이그레이션 완전 제거 - 이미 존재하는 writingSummary를 절대 덮어쓰지 않음
       // writingSummary가 있으면 그대로 사용, 없으면 빈 배열로 초기화
       const hasWritingSummary =
         currentUserData.writingSummary &&
@@ -1018,11 +1020,11 @@ export default function StudentDashboard({ user, userData }) {
         }
       }
 
-      // 🚀 userData에서 글 요약 추출 (DB 읽기 0회!)
+      // userData에서 글 요약 추출 (DB 읽기 0회!)
       studentWritings = getWritingSummaryFromUserData(currentUserData);
-      devLog(`[📊 캐시] 글 ${studentWritings.length}개 - userData에서 로드`);
+      devLog(`[ 캐시] 글 ${studentWritings.length}개 - userData에서 로드`);
 
-      // 🚀 1시간 지난 미달성 글은 Cloud Function(autoCleanupFailedWritings)에서 자동 삭제됨
+      // 1시간 지난 미달성 글은 Cloud Function(autoCleanupFailedWritings)에서 자동 삭제됨
       // 클라이언트에서는 화면에서만 필터링 (권한 문제 없이 처리)
       const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000);
       studentWritings = studentWritings.filter((w) => {
@@ -1040,7 +1042,7 @@ export default function StudentDashboard({ user, userData }) {
         return true;
       });
 
-      // 2. 🚀 통계는 userData에서 계산 (writingSummary 기반 - DB 읽기 0회!)
+      // 2.  통계는 userData에서 계산 (writingSummary 기반 - DB 읽기 0회!)
       // studentStats 컬렉션은 제출 시에만 업데이트하고, 로그인 시에는 writingSummary에서 계산
       const submittedWritings = studentWritings.filter((w) => !w.isDraft);
       studentStats = {
@@ -1054,24 +1056,24 @@ export default function StudentDashboard({ user, userData }) {
             : 0,
         scores: submittedWritings.map((w) => w.score || 0),
       };
-      devLog(`[📊 캐시] 통계 - writingSummary에서 계산 (DB 읽기 0회)`);
+      devLog(`[ 캐시] 통계 - writingSummary에서 계산 (DB 읽기 0회)`);
 
       // 즉시 UI 업데이트
       setWritings(studentWritings);
       setStats(studentStats);
 
-      // 3. 🚀 반 정보 로드 - 과제는 항상 최신 데이터 사용 (DB 읽기 1회)
+      // 3.  반 정보 로드 - 과제는 항상 최신 데이터 사용 (DB 읽기 1회)
       // 과제는 교사가 언제든 추가/삭제할 수 있으므로 캐시만 사용하면 안됨
       if (userData.classCode) {
         try {
-          devLog(`[📊 DB읽기] 학급 정보 - classes 문서 조회 (과제 최신화)`);
+          devLog(`[ DB읽기] 학급 정보 - classes 문서 조회 (과제 최신화)`);
           cls = await getClassByCode(userData.classCode, true); // forceRefresh로 최신 데이터
         } catch (err) {
           console.error("학급 정보 조회 에러:", err);
           // 에러 시 캐시 사용
           if (currentUserData.classInfo) {
             cls = currentUserData.classInfo;
-            devLog(`[📊 캐시] 학급 정보 - 에러로 인해 캐시 사용`);
+            devLog(`[ 캐시] 학급 정보 - 에러로 인해 캐시 사용`);
           }
         }
       }
@@ -1079,7 +1081,7 @@ export default function StudentDashboard({ user, userData }) {
       if (cls) {
         setClassInfo(cls);
 
-        // 🚀 v5: description + minScore 필드 마이그레이션 (강제 실행)
+        // v5: description + minScore 필드 마이그레이션 (강제 실행)
         const migrationKey = `assignmentSummary_v5_${userData.classCode}`;
         const hasAllFields =
           cls.assignmentSummary &&
@@ -1106,9 +1108,9 @@ export default function StudentDashboard({ user, userData }) {
           }
         }
 
-        // 🚀 v6: 기존 글의 minScore 마이그레이션 - 교사 권한 필요, 학생 대시보드에서는 스킵
+        // v6: 기존 글의 minScore 마이그레이션 - 교사 권한 필요, 학생 대시보드에서는 스킵
 
-        // 🚀 classes 문서의 assignmentSummary에서 과제 목록 추출 (DB 읽기 0회!)
+        // classes 문서의 assignmentSummary에서 과제 목록 추출 (DB 읽기 0회!)
         const allClassAssignments = getAssignmentsFromClassInfo(cls);
 
         // 만료되지 않은 과제만 필터링 (생성일 기준 7일 이내)
@@ -1118,7 +1120,7 @@ export default function StudentDashboard({ user, userData }) {
           return Date.now() < expiresAt;
         });
         devLog(
-          `[📊 최적화] 과제 ${classAssignments.length}개 (만료 제외) - classes 문서에서 로드 (DB 읽기 0회)`,
+          `[ 최적화] 과제 ${classAssignments.length}개 (만료 제외) - classes 문서에서 로드 (DB 읽기 0회)`,
         );
 
         // 목표에 도달한 과제 필터링
@@ -1163,9 +1165,9 @@ export default function StudentDashboard({ user, userData }) {
         setAllAssignments(classAssignments);
       }
 
-      // 🚀 로그인 시 총 DB 읽기 요약
+      // 로그인 시 총 DB 읽기 요약
       devLog("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      devLog(`[📊 로그인 완료] 총 DB 읽기: 2회`);
+      devLog(`[ 로그인 완료] 총 DB 읽기: 2회`);
       devLog("  - users 문서: 1회 (App.jsx에서 로드)");
       devLog("  - classes 문서: 1회 (과제 최신화)");
       devLog("  - studentStats: 0회 (writingSummary에서 계산)");
@@ -1207,10 +1209,10 @@ export default function StudentDashboard({ user, userData }) {
     }
   };
 
-  // 🚀 autoSave 함수 제거 - Firestore 비용 최적화
+  // autoSave 함수 제거 - Firestore 비용 최적화
   // 주제 이동 시 경고창으로 대체 (handleTopicSelect에서 처리)
 
-  // 🚀 주제 이동 시 경고창 추가 - 자동저장 대체
+  // 주제 이동 시 경고창 추가 - 자동저장 대체
   const handleTopicSelect = (topic) => {
     // 현재 작성 중인 글이 있고, 다른 주제로 이동하려는 경우 경고
     if (
@@ -1220,12 +1222,12 @@ export default function StudentDashboard({ user, userData }) {
       currentWriting.content.trim().length > 0
     ) {
       const confirmMove = window.confirm(
-        `⚠️ 작성 중인 글이 있습니다!\n\n` +
+        ` 작성 중인 글이 있습니다!\n\n` +
           `현재 주제: "${currentWriting.topic}"\n` +
           `작성된 글자 수: ${currentWriting.wordCount}자\n\n` +
           `"${topic.title}" 주제로 이동하면 작성 중인 글이 삭제됩니다.\n` +
           `그래도 이동하시겠습니까?\n\n` +
-          `💡 팁: 글을 유지하려면 '취소'를 누른 후 '제출하기'로 저장하세요.`,
+          ` 팁: 글을 유지하려면 '취소'를 누른 후 '제출하기'로 저장하세요.`,
       );
 
       if (!confirmMove) {
@@ -1238,7 +1240,7 @@ export default function StudentDashboard({ user, userData }) {
     // 해당 주제에 이전에 저장된 글이 있는지 확인 (로컬 메모리)
     const savedDraft = draftsByTopic[topic.title];
 
-    // 🚀 로컬 스토리지에서 임시 저장 확인 (크래시/새로고침 복구)
+    // 로컬 스토리지에서 임시 저장 확인 (크래시/새로고침 복구)
     let localDraft = null;
     try {
       const localDraftKey = `writing_draft_${user.uid}_${topic.title}`;
@@ -1266,21 +1268,21 @@ export default function StudentDashboard({ user, userData }) {
     const recoveredWordCount =
       localDraft?.wordCount || savedDraft?.wordCount || 0;
 
-    // 🚀 로컬 스토리지에서 복구된 경우 알림
+    // 로컬 스토리지에서 복구된 경우 알림
     if (localDraft?.content && localDraft.content.trim().length > 0) {
       const savedTime = new Date(localDraft.savedAt);
       const timeAgo = Math.floor((Date.now() - savedTime.getTime()) / 60000); // 분 단위
       if (timeAgo < 60) {
         setTimeout(() => {
           alert(
-            `📝 ${timeAgo}분 전에 작성하던 글이 복구되었습니다!\n\n글자 수: ${localDraft.wordCount}자`,
+            ` ${timeAgo}분 전에 작성하던 글이 복구되었습니다!\n\n글자 수: ${localDraft.wordCount}자`,
           );
         }, 500);
       } else {
         const hoursAgo = Math.floor(timeAgo / 60);
         setTimeout(() => {
           alert(
-            `📝 ${hoursAgo}시간 전에 작성하던 글이 복구되었습니다!\n\n글자 수: ${localDraft.wordCount}자`,
+            ` ${hoursAgo}시간 전에 작성하던 글이 복구되었습니다!\n\n글자 수: ${localDraft.wordCount}자`,
           );
         }, 500);
       }
@@ -1315,7 +1317,7 @@ export default function StudentDashboard({ user, userData }) {
     // 글자 수 마일스톤 체크
     checkWordCountMilestone(wordCount);
 
-    // 🚀 로컬 스토리지에 자동 저장 (크래시/새로고침 대비)
+    // 로컬 스토리지에 자동 저장 (크래시/새로고침 대비)
     if (currentWriting.topic && content.trim().length > 0) {
       try {
         const localDraftKey = `writing_draft_${user.uid}_${currentWriting.topic}`;
@@ -1416,7 +1418,7 @@ export default function StudentDashboard({ user, userData }) {
       return;
     }
 
-    // 🚀 고쳐쓰기 모드: 최소 10글자 이상 변경해야 제출 가능 (특수문자 제외!)
+    // 고쳐쓰기 모드: 최소 10글자 이상 변경해야 제출 가능 (특수문자 제외!)
     if (rewriteMode && rewriteMode.originalContent) {
       // 특수문자, 공백 제거 (의미있는 글자만 카운트)
       const meaninglessChars =
@@ -1441,21 +1443,21 @@ export default function StudentDashboard({ user, userData }) {
       }
     }
 
-    // 🔒 제출 전 미리보기 — AI(국외)로 갈 글을 이름·주소 가린 모습으로 보여 주고, 더 가릴 낱말을 고르게 한다
+    // 제출 전 미리보기 — AI(국외)로 갈 글을 이름·주소 가린 모습으로 보여 주고, 더 가릴 낱말을 고르게 한다
     const maskWords = await new Promise((resolve) => setMaskPreview({ text: currentWriting.content, resolve }));
     setMaskPreview(null);
     if (maskWords === null) return;
 
     setIsSubmitting(true);
     try {
-      // 🚀 최적화: classCode와 userData 전달하여 Firestore 읽기 2회 감소
+      // 최적화: classCode와 userData 전달하여 Firestore 읽기 2회 감소
       const classCode = userData.classCode || classInfo?.classCode;
       devLog(
         `[제출] classCode: ${classCode}, topic: "${currentWriting.topic}"`,
       );
       devLog(`[제출] userData:`, userData);
 
-      // 🚀 자동 고쳐쓰기 모드: 같은 주제로 이전에 제출한 글이 있으면 자동 적용
+      // 자동 고쳐쓰기 모드: 같은 주제로 이전에 제출한 글이 있으면 자동 적용
       let isAutoRewrite = !!rewriteMode;
       let previousScoreForRewrite = currentWriting.previousScore || null;
 
@@ -1485,9 +1487,9 @@ export default function StudentDashboard({ user, userData }) {
         isAutoRewrite,
         classCode,
         userData,
-        testScoreMode, // 🧪 테스트 모드 점수 (null, 'pass', 'fail', 'custom')
-        testScoreMode === "custom" ? customTestScore : null, // 🧪 직접 입력 점수
-        aiHelpHistory, // 🚀 AI 도움 기록 (표절 검사용)
+        testScoreMode, // 테스트 모드 점수 (null, 'pass', 'fail', 'custom')
+        testScoreMode === "custom" ? customTestScore : null, // 직접 입력 점수
+        aiHelpHistory, // AI 도움 기록 (표절 검사용)
       );
 
       // 과제별 기준점수 (과제가 아니면 기본 PASSING_SCORE 사용)
@@ -1523,11 +1525,11 @@ export default function StudentDashboard({ user, userData }) {
       if (currentWriting.topic) {
         await deleteDraft(user.uid, currentWriting.topic);
         setHasDraft(false);
-        // 🚀 로컬 스토리지 + 세션 스토리지 임시 저장도 삭제
+        // 로컬 스토리지 + 세션 스토리지 임시 저장도 삭제
         try {
           const localDraftKey = `writing_draft_${user.uid}_${currentWriting.topic}`;
           localStorage.removeItem(localDraftKey);
-          // 🚀 세션 스토리지도 삭제 (제출 완료된 글이 다시 복구되지 않도록)
+          // 세션 스토리지도 삭제 (제출 완료된 글이 다시 복구되지 않도록)
           const sessionDraftKey = `writing_session_${user.uid}`;
           sessionStorage.removeItem(sessionDraftKey);
         } catch (e) {
@@ -1536,7 +1538,7 @@ export default function StudentDashboard({ user, userData }) {
       }
 
       // 글 초기화 (피드백은 유지)
-      // 🚀 주의: setSelectedTopic(null)을 먼저 해야 피드백 화면이 표시됨
+      // 주의: setSelectedTopic(null)을 먼저 해야 피드백 화면이 표시됨
       setSelectedTopic(null);
       setAiHelp(null);
       setAiHelpHistory([]); // AI 도움 기록 초기화
@@ -1549,7 +1551,7 @@ export default function StudentDashboard({ user, userData }) {
         studentName: userData.name,
       });
 
-      // 🚀 제출 성공 시 writings 목록에 새 글 추가 (loadData 호출하지 않음 - 피드백 화면 유지!)
+      // 제출 성공 시 writings 목록에 새 글 추가 (loadData 호출하지 않음 - 피드백 화면 유지!)
       // loadData()를 호출하면 비동기 처리 중 피드백 화면이 깜빡이거나 사라질 수 있음
       if (!result.notSaved) {
         setWritings((prev) => [
@@ -1565,32 +1567,32 @@ export default function StudentDashboard({ user, userData }) {
         ]);
       }
 
-      // 🚀 포인트 즉시 업데이트 (레벨 유지를 위해 totalPoints도 업데이트)
+      // 포인트 즉시 업데이트 (레벨 유지를 위해 totalPoints도 업데이트)
       if (result.earnedPoints > 0) {
         setPoints((prev) => prev + result.earnedPoints);
         setTotalPoints((prev) => prev + result.earnedPoints); // 누적 포인트 증가 (레벨 계산용)
       }
 
-      // 🚀 비용 최적화: 글 제출 후 랭킹 새로고침 제거 (랭킹 탭에서만 로드)
+      // 비용 최적화: 글 제출 후 랭킹 새로고침 제거 (랭킹 탭에서만 로드)
     } catch (error) {
       console.error("[제출 오류]", error);
-      // 🚀 모바일 오류 개선: 더 상세한 에러 메시지
+      // 모바일 오류 개선: 더 상세한 에러 메시지
       let errorMessage = "제출에 실패했습니다.";
       if (
         error.code === "functions/deadline-exceeded" ||
         error.message?.includes("timeout")
       ) {
         errorMessage =
-          "⏱️ 서버 응답 시간이 초과되었습니다.\n\n잠시 후 다시 시도해주세요.\n(네트워크 연결을 확인해주세요)";
+          "서버 응답 시간이 초과되었습니다.\n\n잠시 후 다시 시도해주세요.\n(네트워크 연결을 확인해주세요)";
       } else if (
         error.code === "functions/unavailable" ||
         error.message?.includes("network")
       ) {
         errorMessage =
-          "📶 네트워크 연결이 불안정합니다.\n\nWi-Fi 또는 데이터 연결을 확인하고 다시 시도해주세요.";
+          "네트워크 연결이 불안정합니다.\n\nWi-Fi 또는 데이터 연결을 확인하고 다시 시도해주세요.";
       } else if (error.code === "functions/internal") {
         errorMessage =
-          "🔧 서버 오류가 발생했습니다.\n\n잠시 후 다시 시도해주세요.";
+          "서버 오류가 발생했습니다.\n\n잠시 후 다시 시도해주세요.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -1849,14 +1851,14 @@ export default function StudentDashboard({ user, userData }) {
   const standard =
     wordCountStatus.standard || WORD_COUNT_STANDARDS[userData.gradeLevel];
 
-  // 🚀 useMemo - 레벨 정보 (totalPoints 변경 시에만 재계산)
+  // useMemo - 레벨 정보 (totalPoints 변경 시에만 재계산)
   const levelInfo = useMemo(() => getLevelInfo(totalPoints), [totalPoints]);
   const nextLevelInfo = useMemo(
     () => getNextLevelInfo(totalPoints),
     [totalPoints],
   );
 
-  // 🚀 useMemo - 업적 체크 (writings, stats, totalPoints, userData.streakDays 변경 시에만 재계산)
+  // useMemo - 업적 체크 (writings, stats, totalPoints, userData.streakDays 변경 시에만 재계산)
   const headerAchievementData = useMemo(() => {
     const scores = writings.map((w) => w.score || 0);
     const wordCounts = writings.map((w) => (w.content || "").length);
@@ -1880,7 +1882,7 @@ export default function StudentDashboard({ user, userData }) {
     return checkAchievements(userStats);
   }, [stats, writings, totalPoints, userData.streakDays]);
 
-  // 🚀 useMemo - 학년별 글자 수 기준 (gradeLevel 변경 시에만 재계산)
+  // useMemo - 학년별 글자 수 기준 (gradeLevel 변경 시에만 재계산)
   const currentWordStandard = useMemo(
     () =>
       WORD_COUNT_STANDARDS[userData.gradeLevel] || WORD_COUNT_STANDARDS["3"],
@@ -1888,7 +1890,7 @@ export default function StudentDashboard({ user, userData }) {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
+    <div className="min-h-screen bg-background via-white to-cyan-50">
       {maskPreview && (
         <MaskPreviewModal text={maskPreview.text} onConfirm={(w) => maskPreview.resolve(w)} onCancel={() => maskPreview.resolve(null)} />
       )}
@@ -1904,8 +1906,8 @@ export default function StudentDashboard({ user, userData }) {
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 transform animate-bounce-in">
             {/* 아이콘 */}
             <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-full flex items-center justify-center shadow-lg">
-                <span className="text-4xl">👋</span>
+              <div className="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-4xl"><Emo n="Hand" /></span>
               </div>
             </div>
 
@@ -1945,7 +1947,7 @@ export default function StudentDashboard({ user, userData }) {
               disabled={!nicknameAlertInput.trim()}
               className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
                 nicknameAlertInput.trim()
-                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                  ? "bg-blue-500 text-white hover:bg-blue-600 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
@@ -1960,20 +1962,13 @@ export default function StudentDashboard({ user, userData }) {
       )}
 
       {/* Header */}
-      <header className="bg-gradient-to-r from-blue-800 via-blue-600 to-cyan-500 text-white shadow-xl relative overflow-hidden">
-        {/* 마법 효과 */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-2 left-10 w-1.5 h-1.5 bg-yellow-300 rounded-full animate-pulse"></div>
-          <div className="absolute top-4 right-20 w-2 h-2 bg-yellow-200 rounded-full animate-ping"></div>
-          <div className="absolute bottom-2 left-1/4 w-1 h-1 bg-white rounded-full animate-pulse"></div>
-          <div className="absolute top-3 right-1/3 w-1.5 h-1.5 bg-cyan-300 rounded-full animate-ping"></div>
-        </div>
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 text-gray-900 backdrop-blur">
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center relative z-10">
           <div className="flex items-center gap-2 sm:gap-4">
             {/* 로고 */}
             <div className="relative inline-block">
-              <span className="text-2xl sm:text-3xl font-black bg-gradient-to-r from-white via-cyan-200 to-white bg-clip-text text-transparent">
+              <span className="text-2xl sm:text-3xl font-black text-primary">
                 싹
               </span>
               {/* 붓 터치 효과 */}
@@ -2006,15 +2001,15 @@ export default function StudentDashboard({ user, userData }) {
                 className="absolute -top-2 right-[-14px] text-xs sm:text-sm animate-pulse"
                 style={{ textShadow: "0 0 8px #fef08a" }}
               >
-                ✨
+                <Emo n="Sparkles" />
               </span>
             </div>
-            <span className="text-xs sm:text-sm font-bold tracking-widest text-cyan-200 opacity-80">
+            <span className="text-xs sm:text-sm font-bold tracking-widest text-primary opacity-80">
               SSAK
             </span>
 
             {/* 아바타 + 레벨 + 업적 + 사용자 정보 */}
-            <div className="ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-white/20 flex items-center gap-2 sm:gap-3">
+            <div className="ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-200 flex items-center gap-2 sm:gap-3">
               {/* 미니 아바타 - 상반신 형태 (옷 위에 얼굴) */}
               <div
                 className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br ${getEquippedBackground().color} ${getEquippedFrame().style} flex items-center justify-center overflow-hidden relative`}
@@ -2026,7 +2021,7 @@ export default function StudentDashboard({ user, userData }) {
                   const clothes = getEquippedClothes();
                   const accessory = getEquippedAccessory();
                   const avatarSize = 32;
-                  // 🎨 은발 등 defaultColor가 있으면 우선 사용
+                  // 은발 등 defaultColor가 있으면 우선 사용
                   const actualHairColor =
                     hair.defaultColor || hairColor.color || "#1a1a1a";
 
@@ -2234,7 +2229,7 @@ export default function StudentDashboard({ user, userData }) {
                 </span>
               </div>
 
-              {/* 🚀 비용 최적화: 메달 표시 제거 (랭킹 탭에서만 확인) */}
+              {/* 비용 최적화: 메달 표시 제거 (랭킹 탭에서만 확인) */}
 
               {/* 업적 표시 - 가장 좋은 업적만 (useMemo로 최적화) */}
               {(() => {
@@ -2244,11 +2239,11 @@ export default function StudentDashboard({ user, userData }) {
                     : null;
 
                 return bestAchievement ? (
-                  <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg bg-white/10 backdrop-blur border border-white/20 shadow-md">
+                  <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg bg-gray-100 backdrop-blur border border-gray-200 shadow-md">
                     <span className="text-xs sm:text-sm">
                       {bestAchievement.emoji}
                     </span>
-                    <span className="text-[10px] sm:text-xs font-medium text-white whitespace-nowrap hidden sm:inline">
+                    <span className="text-[10px] sm:text-xs font-medium text-gray-900 whitespace-nowrap hidden sm:inline">
                       {bestAchievement.name}
                     </span>
                   </div>
@@ -2256,8 +2251,8 @@ export default function StudentDashboard({ user, userData }) {
               })()}
 
               <div className="hidden sm:block">
-                <p className="text-sm text-white font-medium">{nickname}</p>
-                <p className="text-xs text-blue-200">
+                <p className="text-sm text-gray-900 font-medium">{nickname}</p>
+                <p className="text-xs text-gray-500">
                   {GRADE_LEVELS[userData.gradeLevel]}{" "}
                   {classInfo && `· ${classInfo.className}`}
                 </p>
@@ -2268,8 +2263,8 @@ export default function StudentDashboard({ user, userData }) {
           {/* 오른쪽: 포인트 + 로그아웃 */}
           <div className="flex items-center gap-1 sm:gap-3">
             {/* 포인트 표시 */}
-            <div className="bg-gradient-to-r from-amber-400 to-yellow-500 px-2 sm:px-4 py-1 sm:py-1.5 rounded-full flex items-center gap-1 shadow-lg">
-              <span className="text-sm sm:text-lg">💎</span>
+            <div className="bg-amber-400 px-2 sm:px-4 py-1 sm:py-1.5 rounded-full flex items-center gap-1 shadow-lg">
+              <span className="text-sm sm:text-lg"><Emo n="Gem" /></span>
               <span className="font-bold text-amber-900 text-xs sm:text-sm">
                 {points}P
               </span>
@@ -2277,13 +2272,10 @@ export default function StudentDashboard({ user, userData }) {
             {/* 로그아웃 버튼 - 모바일에서 2줄 표시 */}
             <button
               onClick={handleLogout}
-              className="bg-white/15 backdrop-blur border border-white/20 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg sm:rounded-xl hover:bg-white/25 transition-all text-[10px] sm:text-sm leading-tight text-center"
+              aria-label="로그아웃"
+              className="inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100"
             >
-              <span className="sm:hidden">
-                로그
-                <br />
-                아웃
-              </span>
+              <LogOut className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">로그아웃</span>
             </button>
           </div>
@@ -2294,27 +2286,27 @@ export default function StudentDashboard({ user, userData }) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs - 모바일 최적화 */}
         <div className="mb-6">
-          <nav className="grid grid-cols-5 gap-1 sm:flex sm:space-x-2 bg-white/80 backdrop-blur p-1.5 rounded-2xl shadow-sm border border-blue-100">
+          <nav className="grid grid-cols-5 gap-1 sm:flex sm:space-x-2 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-200">
             <button
               onClick={() => handleTabChange("write")}
               className={`${
                 activeTab === "write"
-                  ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-blue-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all`}
             >
-              <span>✍️</span> <span className="hidden sm:inline">글쓰기</span>
+              <span><Emo n="PenLine" /></span> <span className="hidden sm:inline">글쓰기</span>
               <span className="sm:hidden">글쓰기</span>
             </button>
             <button
               onClick={() => handleTabChange("history")}
               className={`${
                 activeTab === "history"
-                  ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-blue-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all`}
             >
-              <span>📋</span>{" "}
+              <span><Emo n="ClipboardList" /></span>{" "}
               <span className="hidden sm:inline">제출 기록</span>
               <span className="sm:hidden">기록</span>
             </button>
@@ -2322,33 +2314,33 @@ export default function StudentDashboard({ user, userData }) {
               onClick={() => handleTabChange("ranking")}
               className={`${
                 activeTab === "ranking"
-                  ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-blue-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all`}
             >
-              <span>🏆</span> <span className="hidden sm:inline">학급랭킹</span>
+              <span><Emo n="Trophy" /></span> <span className="hidden sm:inline">학급랭킹</span>
               <span className="sm:hidden">랭킹</span>
             </button>
             <button
               onClick={() => handleTabChange("stats")}
               className={`${
                 activeTab === "stats"
-                  ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-blue-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all`}
             >
-              <span>📊</span> <span className="hidden sm:inline">통계</span>
+              <span><Emo n="BarChart3" /></span> <span className="hidden sm:inline">통계</span>
               <span className="sm:hidden">통계</span>
             </button>
             <button
               onClick={() => handleTabChange("profile")}
               className={`${
                 activeTab === "profile"
-                  ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-md"
-                  : "text-gray-600 hover:bg-blue-50"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-emerald-50"
               } flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all`}
             >
-              <span>👤</span>{" "}
+              <span><Emo n="User" /></span>{" "}
               <span className="hidden sm:inline">내 프로필</span>
               <span className="sm:hidden">프로필</span>
             </button>
@@ -2363,14 +2355,14 @@ export default function StudentDashboard({ user, userData }) {
               <div className="bg-white/90 backdrop-blur shadow-lg rounded-2xl p-6 border border-blue-100">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-                    <span className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center text-white text-sm">
-                      📚
+                    <span className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white text-sm">
+                      <Emo n="BookOpen" />
                     </span>
                     선생님 과제
                   </h3>
                   {completedAssignmentsCount > 0 && (
                     <div className="flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
-                      <span>✅</span>
+                      <span><Emo n="CheckCircle2" /></span>
                       <span>{completedAssignmentsCount}개 완료!</span>
                     </div>
                   )}
@@ -2378,7 +2370,7 @@ export default function StudentDashboard({ user, userData }) {
 
                 {/* 남은 과제 수 표시 */}
                 {(assignments.length > 0 || completedAssignmentsCount > 0) && (
-                  <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100">
+                  <div className="mb-4 p-3 bg-background rounded-xl border border-blue-100">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">남은 과제</span>
                       <span className="font-bold text-blue-600">
@@ -2388,7 +2380,7 @@ export default function StudentDashboard({ user, userData }) {
                     {completedAssignmentsCount > 0 && (
                       <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
                         <div
-                          className="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all"
+                          className="h-2 rounded-full bg-emerald-400 transition-all"
                           style={{
                             width: `${(completedAssignmentsCount / (completedAssignmentsCount + assignments.length)) * 100}%`,
                           }}
@@ -2441,7 +2433,7 @@ export default function StudentDashboard({ user, userData }) {
                             )}
                             {assignment.dueDate && (
                               <div className="flex items-center gap-1 text-xs text-orange-600 mt-2">
-                                <span>⏰</span>
+                                <span><Emo n="Clock" /></span>
                                 <span>
                                   마감:{" "}
                                   {new Date(
@@ -2461,8 +2453,8 @@ export default function StudentDashboard({ user, userData }) {
                     </div>
                   ) : completedAssignmentsCount > 0 ? (
                     <div className="text-center py-8">
-                      <div className="w-20 h-20 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-4xl">🎉</span>
+                      <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-4xl"><Emo n="PartyPopper" /></span>
                       </div>
                       <p className="text-emerald-700 font-semibold text-lg">
                         모든 과제를 완료했어요!
@@ -2478,7 +2470,7 @@ export default function StudentDashboard({ user, userData }) {
                   ) : (
                     <div className="text-center py-8">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl">📭</span>
+                        <span className="text-2xl"><Emo n="Inbox" /></span>
                       </div>
                       <p className="text-gray-500 text-sm">
                         아직 출제된 과제가 없습니다.
@@ -2501,9 +2493,9 @@ export default function StudentDashboard({ user, userData }) {
                       <h3 className="text-xl font-semibold text-gray-900">
                         {currentWriting.topic}
                       </h3>
-                      {/* 🚀 과제 설명 표시 */}
+                      {/* 과제 설명 표시 */}
                       {selectedTopic.description && (
-                        <div className="mt-2 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                        <div className="mt-2 p-3 bg-background border border-blue-200 rounded-xl">
                           <p className="text-sm text-blue-700">
                             {selectedTopic.description}
                           </p>
@@ -2577,7 +2569,7 @@ export default function StudentDashboard({ user, userData }) {
                             </>
                           ) : lastSavedAt ? (
                             <>
-                              💾{" "}
+                              <Emo n="Save" />{" "}
                               {lastSavedAt.toLocaleTimeString("ko-KR", {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -2593,10 +2585,10 @@ export default function StudentDashboard({ user, userData }) {
 
                     {/* 고쳐쓰기 모드 배너 */}
                     {rewriteMode && (
-                      <div className="mb-4 p-3 bg-gradient-to-r from-orange-100 to-amber-100 border-2 border-orange-300 rounded-xl">
+                      <div className="mb-4 p-3 bg-orange-100 border-2 border-orange-300 rounded-xl">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-2xl">✏️</span>
+                            <span className="text-2xl"><Emo n="Pencil" /></span>
                             <div>
                               <h4 className="font-bold text-orange-800">
                                 고쳐쓰기 모드
@@ -2612,7 +2604,7 @@ export default function StudentDashboard({ user, userData }) {
                             onClick={() => setRewriteMode(null)}
                             className="text-orange-500 hover:text-orange-700 text-sm"
                           >
-                            모드 종료 ✕
+                            모드 종료 <Emo n="X" />
                           </button>
                         </div>
                       </div>
@@ -2622,12 +2614,12 @@ export default function StudentDashboard({ user, userData }) {
                     {rewriteMode &&
                       rewriteMode.detailedFeedback &&
                       rewriteMode.detailedFeedback.length > 0 && (
-                        <div className="mb-3 p-4 bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-300 rounded-xl">
+                        <div className="mb-3 p-4 bg-orange-50 border-2 border-orange-300 rounded-xl">
                           {/* 빨간색 강조된 원본 글 */}
                           <div className="mb-4">
                             <div className="flex items-center gap-2 mb-2">
                               <span className="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center text-sm">
-                                📌
+                                <Emo n="Pin" />
                               </span>
                               <span className="font-bold text-orange-800">
                                 원본 글 (수정이 필요한 부분은 빨간색)
@@ -2639,7 +2631,7 @@ export default function StudentDashboard({ user, userData }) {
                                 let highlightedContent =
                                   rewriteMode.originalContent ||
                                   currentWriting.content;
-                                // 🚀 수정 필요 문장 필터링: 현재 글에 실제로 존재하는 것만 강조
+                                // 수정 필요 문장 필터링: 현재 글에 실제로 존재하는 것만 강조
                                 const validFeedback =
                                   rewriteMode.detailedFeedback.filter(
                                     (item) =>
@@ -2697,7 +2689,7 @@ export default function StudentDashboard({ user, userData }) {
                               <div>
                                 <div className="flex items-center gap-2 mb-3">
                                   <span className="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center text-sm">
-                                    📝
+                                    <Emo n="PenLine" />
                                   </span>
                                   <span className="font-bold text-orange-800">
                                     AI가 제안하는 수정 사항
@@ -2732,7 +2724,7 @@ export default function StudentDashboard({ user, userData }) {
                                           </div>
                                           <p className="text-xs text-gray-600 flex items-center gap-1">
                                             <span className="text-amber-500">
-                                              💡
+                                              <Emo n="Lightbulb" />
                                             </span>{" "}
                                             {item.reason}
                                             {item.type && (
@@ -2775,7 +2767,7 @@ export default function StudentDashboard({ user, userData }) {
                             rewriteMode.improvements.length > 0 && (
                               <div className="mt-4 pt-3 border-t border-orange-200">
                                 <h5 className="font-semibold text-orange-700 text-sm mb-2">
-                                  💪 추가 개선 포인트
+                                  <Emo n="Dumbbell" /> 추가 개선 포인트
                                 </h5>
                                 <ul className="space-y-1">
                                   {rewriteMode.improvements.map(
@@ -2799,9 +2791,9 @@ export default function StudentDashboard({ user, userData }) {
 
                     {/* 글자 수 축하 애니메이션 */}
                     {showWordCountCelebration && (
-                      <div className="mb-3 p-4 bg-gradient-to-r from-yellow-100 via-amber-100 to-orange-100 border-2 border-yellow-400 rounded-xl animate-bounce">
+                      <div className="mb-3 p-4 bg-yellow-100 border-2 border-yellow-400 rounded-xl animate-bounce">
                         <div className="flex items-center justify-center gap-3">
-                          <span className="text-3xl">🎉</span>
+                          <span className="text-3xl"><Emo n="PartyPopper" /></span>
                           <div className="text-center">
                             <p className="font-bold text-amber-800 text-lg">
                               {lastWordCountMilestone}자 달성!
@@ -2810,7 +2802,7 @@ export default function StudentDashboard({ user, userData }) {
                               대단해요! 계속 써보세요!
                             </p>
                           </div>
-                          <span className="text-3xl">🎉</span>
+                          <span className="text-3xl"><Emo n="PartyPopper" /></span>
                         </div>
                       </div>
                     )}
@@ -2823,24 +2815,24 @@ export default function StudentDashboard({ user, userData }) {
                           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
                             isListening
                               ? "bg-red-500 text-white animate-pulse"
-                              : "bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 hover:from-indigo-200 hover:to-purple-200"
+                              : "bg-background text-indigo-700 hover:bg-indigo-200"
                           }`}
                         >
                           {isListening ? (
                             <>
                               <span className="w-3 h-3 bg-white rounded-full animate-ping" />
-                              🎤 말하는 중...
+                              <Emo n="Mic" /> 말하는 중...
                             </>
                           ) : (
-                            <>🎤 음성 입력</>
+                            <><Emo n="Mic" /> 음성 입력</>
                           )}
                         </button>
                       )}
                       <button
                         onClick={() => setShowTemplateModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 rounded-lg font-medium hover:from-emerald-200 hover:to-teal-200 transition-all"
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-medium hover:bg-emerald-200 transition-all"
                       >
-                        📋 템플릿
+                        <Emo n="ClipboardList" /> 템플릿
                       </button>
                     </div>
 
@@ -2850,7 +2842,7 @@ export default function StudentDashboard({ user, userData }) {
                       onPaste={(e) => {
                         e.preventDefault();
                         alert(
-                          "붙여넣기가 차단되었습니다.\n\n직접 글을 작성해 주세요! ✍️\n\nAI 힌트는 참고만 하고, 자신의 말로 다시 써보세요.",
+                          "붙여넣기가 차단되었습니다.\n\n직접 글을 작성해 주세요! \n\nAI 힌트는 참고만 하고, 자신의 말로 다시 써보세요.",
                         );
                       }}
                       placeholder={
@@ -2874,21 +2866,21 @@ export default function StudentDashboard({ user, userData }) {
                         disabled={loadingHelp}
                         className="flex-1 min-w-[100px] bg-emerald-100 text-emerald-700 px-3 py-2 rounded-lg text-sm hover:bg-emerald-200 disabled:opacity-50 font-medium"
                       >
-                        💡 힌트
+                        <Emo n="Lightbulb" /> 힌트
                       </button>
                       <button
                         onClick={() => handleGetAIHelp("polish")}
                         disabled={loadingHelp || !currentWriting.content}
                         className="flex-1 min-w-[100px] bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-sm hover:bg-blue-200 disabled:opacity-50 font-medium"
                       >
-                        ✨ 표현 다듬기
+                        <Emo n="Sparkles" /> 표현 다듬기
                       </button>
                       <button
                         onClick={() => handleGetAIHelp("expand")}
                         disabled={loadingHelp || !currentWriting.content}
                         className="flex-1 min-w-[100px] bg-purple-100 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-200 disabled:opacity-50 font-medium"
                       >
-                        📝 확장
+                        <Emo n="PenLine" /> 확장
                       </button>
                     </div>
 
@@ -2896,7 +2888,7 @@ export default function StudentDashboard({ user, userData }) {
                     <div className="mt-2">
                       {currentWriting.wordCount < 20 && (
                         <p className="text-xs text-gray-500 mb-1 text-center">
-                          💡 20자 이상 작성하면 AI 조언을 받을 수 있어요! (
+                          <Emo n="Lightbulb" /> 20자 이상 작성하면 AI 조언을 받을 수 있어요! (
                           {currentWriting.wordCount}/20자)
                         </p>
                       )}
@@ -2906,48 +2898,48 @@ export default function StudentDashboard({ user, userData }) {
                           disabled={
                             loadingQuickAdvice || currentWriting.wordCount < 20
                           }
-                          className="flex-1 min-w-[100px] bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 px-3 py-2 rounded-lg text-sm hover:from-amber-200 hover:to-orange-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-amber-200 transition-all"
+                          className="flex-1 min-w-[100px] bg-amber-100 text-amber-700 px-3 py-2 rounded-lg text-sm hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-amber-200 transition-all"
                           title="다음에 쓸 내용에 대한 힌트를 받아요"
                         >
-                          {loadingQuickAdvice ? "..." : "🚀 다음 문장"}
+                          {loadingQuickAdvice ? "..." : "다음 문장"}
                         </button>
                         <button
                           onClick={() => handleGetQuickAdvice("improve")}
                           disabled={
                             loadingQuickAdvice || currentWriting.wordCount < 20
                           }
-                          className="flex-1 min-w-[100px] bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-700 px-3 py-2 rounded-lg text-sm hover:from-cyan-200 hover:to-blue-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-cyan-200 transition-all"
+                          className="flex-1 min-w-[100px] bg-background text-cyan-700 px-3 py-2 rounded-lg text-sm hover:bg-cyan-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-cyan-200 transition-all"
                           title="마지막 문장을 더 좋게 개선해요"
                         >
-                          {loadingQuickAdvice ? "..." : "✨ 문장 개선"}
+                          {loadingQuickAdvice ? "..." : "문장 개선"}
                         </button>
                         <button
                           onClick={() => handleGetQuickAdvice("check")}
                           disabled={
                             loadingQuickAdvice || currentWriting.wordCount < 20
                           }
-                          className="flex-1 min-w-[100px] bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-3 py-2 rounded-lg text-sm hover:from-rose-200 hover:to-pink-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-rose-200 transition-all"
+                          className="flex-1 min-w-[100px] bg-red-100 text-rose-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-rose-200 transition-all"
                           title="맞춤법과 문법 오류를 체크해요"
                         >
-                          {loadingQuickAdvice ? "..." : "🔍 맞춤법/문법"}
+                          {loadingQuickAdvice ? "..." : "맞춤법/문법"}
                         </button>
                       </div>
                     </div>
 
                     {/* 실시간 조언 결과 */}
                     {quickAdvice && (
-                      <div className="mt-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
+                      <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <h5 className="font-semibold text-sm text-amber-800 mb-1 flex items-center gap-1">
                               {quickAdvice.type === "next" &&
-                                "🚀 다음에 쓸 내용"}
+                                "다음에 쓸 내용"}
                               {quickAdvice.type === "improve" &&
-                                "✨ 문장 개선 제안"}
+                                "문장 개선 제안"}
                               {quickAdvice.type === "check" &&
-                                "🔍 맞춤법/문법 체크"}
+                                "맞춤법/문법 체크"}
                               {quickAdvice.type === "encourage" &&
-                                "💪 응원 메시지"}
+                                "응원 메시지"}
                             </h5>
                             <p className="text-sm text-amber-900">
                               {quickAdvice.advice}
@@ -2957,7 +2949,7 @@ export default function StudentDashboard({ user, userData }) {
                             onClick={() => setQuickAdvice(null)}
                             className="text-amber-600 hover:text-amber-800 ml-2"
                           >
-                            ✕
+                            <Emo n="X" />
                           </button>
                         </div>
                       </div>
@@ -2969,10 +2961,10 @@ export default function StudentDashboard({ user, userData }) {
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <h5 className="font-medium text-sm text-yellow-900 mb-2">
-                              {aiHelp.type === "hint" && "💡 힌트"}
-                              {aiHelp.type === "polish" && "✨ 표현 다듬기"}
-                              {aiHelp.type === "expand" && "📝 확장 아이디어"}
-                              {aiHelp.type === "grammar" && "✏️ 문법 검사"}
+                              {aiHelp.type === "hint" && "힌트"}
+                              {aiHelp.type === "polish" && "표현 다듬기"}
+                              {aiHelp.type === "expand" && "확장 아이디어"}
+                              {aiHelp.type === "grammar" && "문법 검사"}
                             </h5>
 
                             {/* 힌트 타입 */}
@@ -2981,7 +2973,7 @@ export default function StudentDashboard({ user, userData }) {
                                 {aiHelp.content.hints && (
                                   <div>
                                     <p className="text-xs font-medium text-yellow-700 mb-1">
-                                      💡 힌트:
+                                      <Emo n="Lightbulb" /> 힌트:
                                     </p>
                                     <ul className="space-y-1">
                                       {aiHelp.content.hints.map((hint, idx) => (
@@ -2998,7 +2990,7 @@ export default function StudentDashboard({ user, userData }) {
                                 {aiHelp.content.questions && (
                                   <div className="mt-2">
                                     <p className="text-xs font-medium text-yellow-700 mb-1">
-                                      ❓ 생각해볼 질문:
+                                      <Emo n="HelpCircle" /> 생각해볼 질문:
                                     </p>
                                     <ul className="space-y-1">
                                       {aiHelp.content.questions.map(
@@ -3023,7 +3015,7 @@ export default function StudentDashboard({ user, userData }) {
                                 {aiHelp.content.praise && (
                                   <div className="bg-green-50 p-2 rounded border border-green-200">
                                     <p className="text-sm text-green-700">
-                                      👏 {aiHelp.content.praise}
+                                      <Emo n="ThumbsUp" /> {aiHelp.content.praise}
                                     </p>
                                   </div>
                                 )}
@@ -3031,7 +3023,7 @@ export default function StudentDashboard({ user, userData }) {
                                   aiHelp.content.suggestions.length > 0 && (
                                     <div>
                                       <p className="text-xs font-medium text-yellow-700 mb-1">
-                                        ✏️ 표현 개선 제안:
+                                        <Emo n="Pencil" /> 표현 개선 제안:
                                       </p>
                                       <ul className="space-y-1.5">
                                         {aiHelp.content.suggestions.map(
@@ -3051,7 +3043,7 @@ export default function StudentDashboard({ user, userData }) {
                                               </div>
                                               {suggestion.reason && (
                                                 <p className="text-gray-500 mt-1 text-xs">
-                                                  💡 {suggestion.reason}
+                                                  <Emo n="Lightbulb" /> {suggestion.reason}
                                                 </p>
                                               )}
                                             </li>
@@ -3059,7 +3051,7 @@ export default function StudentDashboard({ user, userData }) {
                                         )}
                                       </ul>
                                       <p className="text-xs text-amber-600 mt-2 bg-amber-50 p-2 rounded">
-                                        ⚠️ 참고만 하고, 자신의 표현으로 직접
+                                        <Emo n="AlertTriangle" /> 참고만 하고, 자신의 표현으로 직접
                                         수정해보세요!
                                       </p>
                                     </div>
@@ -3067,7 +3059,7 @@ export default function StudentDashboard({ user, userData }) {
                                 {aiHelp.content.tips && (
                                   <div className="mt-2">
                                     <p className="text-xs font-medium text-yellow-700 mb-1">
-                                      💡 팁:
+                                      <Emo n="Lightbulb" /> 팁:
                                     </p>
                                     <ul className="list-disc list-inside text-xs text-yellow-800">
                                       {aiHelp.content.tips.map((tip, idx) => (
@@ -3085,7 +3077,7 @@ export default function StudentDashboard({ user, userData }) {
                                 {aiHelp.content.expandIdeas && (
                                   <div>
                                     <p className="text-xs font-medium text-yellow-700 mb-1">
-                                      💡 확장 아이디어:
+                                      <Emo n="Lightbulb" /> 확장 아이디어:
                                     </p>
                                     <ul className="space-y-1">
                                       {aiHelp.content.expandIdeas.map(
@@ -3106,7 +3098,7 @@ export default function StudentDashboard({ user, userData }) {
                                     0 && (
                                     <div className="mt-2">
                                       <p className="text-xs font-medium text-yellow-700 mb-1">
-                                        📝 세부 제안:
+                                        <Emo n="PenLine" /> 세부 제안:
                                       </p>
                                       <ul className="space-y-1">
                                         {aiHelp.content.detailSuggestions.map(
@@ -3128,7 +3120,7 @@ export default function StudentDashboard({ user, userData }) {
                                 {aiHelp.content.examples && (
                                   <div className="mt-2">
                                     <p className="text-xs font-medium text-yellow-700 mb-1">
-                                      📌 예시:
+                                      <Emo n="Pin" /> 예시:
                                     </p>
                                     <ul className="list-disc list-inside text-xs text-yellow-800">
                                       {aiHelp.content.examples.map(
@@ -3170,7 +3162,7 @@ export default function StudentDashboard({ user, userData }) {
                                   </div>
                                 ) : (
                                   <p className="text-sm text-yellow-800">
-                                    문법 오류가 발견되지 않았습니다! 👍
+                                    문법 오류가 발견되지 않았습니다! <Emo n="ThumbsUp" />
                                   </p>
                                 )}
                               </div>
@@ -3201,7 +3193,7 @@ export default function StudentDashboard({ user, userData }) {
                             onClick={() => setAiHelp(null)}
                             className="text-yellow-700 hover:text-yellow-900 ml-2"
                           >
-                            ✕
+                            <Emo n="X" />
                           </button>
                         </div>
                       </div>
@@ -3311,11 +3303,11 @@ export default function StudentDashboard({ user, userData }) {
                       )}
                     </div>
 
-                    {/* 🧪 테스트 학생 점수 선택 UI */}
+                    {/* 테스트 학생 점수 선택 UI */}
                     {isTestStudent && (
                       <div className="mt-2 p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="text-lg">🧪</span>
+                          <span className="text-lg"><Emo n="FlaskConical" /></span>
                           <span className="font-bold text-yellow-700">
                             테스트 모드
                           </span>
@@ -3339,7 +3331,7 @@ export default function StudentDashboard({ user, userData }) {
                                 : "bg-green-100 text-green-700 hover:bg-green-200"
                             }`}
                           >
-                            ✅ 도달
+                            <Emo n="CheckCircle2" /> 도달
                           </button>
                           <button
                             onClick={() => setTestScoreMode("fail")}
@@ -3349,7 +3341,7 @@ export default function StudentDashboard({ user, userData }) {
                                 : "bg-red-100 text-red-700 hover:bg-red-200"
                             }`}
                           >
-                            ❌ 미달
+                            <Emo n="XCircle" /> 미달
                           </button>
                           <button
                             onClick={() => setTestScoreMode("custom")}
@@ -3359,7 +3351,7 @@ export default function StudentDashboard({ user, userData }) {
                                 : "bg-purple-100 text-purple-700 hover:bg-purple-200"
                             }`}
                           >
-                            🎯 직접입력
+                            <Emo n="Target" /> 직접입력
                           </button>
                         </div>
                         {testScoreMode === "custom" && (
@@ -3402,8 +3394,8 @@ export default function StudentDashboard({ user, userData }) {
                         {testScoreMode && testScoreMode !== "custom" && (
                           <p className="mt-2 text-sm text-yellow-600">
                             {testScoreMode === "pass"
-                              ? "📌 제출 시 기준점수 이상의 점수로 저장됩니다."
-                              : "📌 제출 시 기준점수 미만의 점수로 저장됩니다."}
+                              ? "제출 시 기준점수 이상의 점수로 저장됩니다."
+                              : "제출 시 기준점수 미만의 점수로 저장됩니다."}
                           </p>
                         )}
                       </div>
@@ -3419,7 +3411,7 @@ export default function StudentDashboard({ user, userData }) {
                         {isSubmitting
                           ? "AI 분석 중..."
                           : isTestStudent && testScoreMode
-                            ? `🧪 테스트 제출 (${testScoreMode === "pass" ? "도달" : testScoreMode === "fail" ? "미달" : `${customTestScore}점`})`
+                            ? ` 테스트 제출 (${testScoreMode === "pass" ? "도달" : testScoreMode === "fail" ? "미달" : `${customTestScore}점`})`
                             : "제출하기"}
                       </button>
                       <button
@@ -3459,8 +3451,8 @@ export default function StudentDashboard({ user, userData }) {
                         <div
                           className={`relative overflow-hidden rounded-2xl p-8 text-white ${
                             isPassed
-                              ? "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500"
-                              : "bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500"
+                              ? "bg-emerald-500"
+                              : "bg-orange-500"
                           }`}
                         >
                           <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-20 translate-x-20"></div>
@@ -3469,9 +3461,9 @@ export default function StudentDashboard({ user, userData }) {
                           <div className="relative z-10 text-center">
                             <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-4">
                               {isPassed ? (
-                                <span className="text-3xl">🎉</span>
+                                <span className="text-3xl"><Emo n="PartyPopper" /></span>
                               ) : (
-                                <span className="text-3xl">💪</span>
+                                <span className="text-3xl"><Emo n="Dumbbell" /></span>
                               )}
                             </div>
                             <h2 className="text-lg font-medium opacity-90 mb-2">
@@ -3491,11 +3483,11 @@ export default function StudentDashboard({ user, userData }) {
                           </div>
                         </div>
 
-                        {/* 🚀 저장 안됨 알림 (기존 미제출글보다 점수가 낮은 경우) */}
+                        {/* 저장 안됨 알림 (기존 미제출글보다 점수가 낮은 경우) */}
                         {feedback.notSaved && (
                           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                             <div className="flex items-start gap-3">
-                              <span className="text-2xl">💡</span>
+                              <span className="text-2xl"><Emo n="Lightbulb" /></span>
                               <div>
                                 <p className="font-medium text-amber-800">
                                   이 글은 저장되지 않았어요
@@ -3513,45 +3505,45 @@ export default function StudentDashboard({ user, userData }) {
 
                         {/* 포인트 획득 축하 카드 */}
                         {feedback.earnedPoints > 0 ? (
-                          <div className="relative overflow-hidden bg-gradient-to-r from-yellow-400 via-amber-400 to-orange-400 rounded-2xl p-6 shadow-xl">
+                          <div className="relative overflow-hidden bg-yellow-400 rounded-2xl p-6 shadow-xl">
                             {/* 배경 장식 */}
                             <div className="absolute top-0 left-0 w-full h-full">
                               <div
                                 className="absolute top-2 left-4 text-4xl animate-bounce"
                                 style={{ animationDelay: "0s" }}
                               >
-                                ⭐
+                                <Emo n="Star" />
                               </div>
                               <div
                                 className="absolute top-4 right-6 text-3xl animate-bounce"
                                 style={{ animationDelay: "0.2s" }}
                               >
-                                🎉
+                                <Emo n="PartyPopper" />
                               </div>
                               <div
                                 className="absolute bottom-3 left-8 text-2xl animate-bounce"
                                 style={{ animationDelay: "0.4s" }}
                               >
-                                ✨
+                                <Emo n="Sparkles" />
                               </div>
                               <div
                                 className="absolute bottom-2 right-4 text-3xl animate-bounce"
                                 style={{ animationDelay: "0.1s" }}
                               >
-                                🌟
+                                <Emo n="Star" />
                               </div>
                               <div className="absolute top-1/2 left-2 text-2xl animate-pulse">
-                                💎
+                                <Emo n="Gem" />
                               </div>
                               <div className="absolute top-1/2 right-2 text-2xl animate-pulse">
-                                💎
+                                <Emo n="Gem" />
                               </div>
                             </div>
 
                             {/* 메인 콘텐츠 */}
                             <div className="relative z-10 text-center">
                               <div className="inline-flex items-center justify-center w-20 h-20 bg-white/30 backdrop-blur rounded-full mb-3 shadow-lg">
-                                <span className="text-5xl">🎁</span>
+                                <span className="text-5xl"><Emo n="Gift" /></span>
                               </div>
                               <h3 className="text-2xl font-black text-white drop-shadow-lg mb-1">
                                 포인트 획득!
@@ -3566,33 +3558,33 @@ export default function StudentDashboard({ user, userData }) {
                               </div>
                               <p className="text-white/90 text-sm font-medium">
                                 {feedback.earnedPoints >= 60
-                                  ? "🏆 최고 점수 보너스!"
+                                  ? "최고 점수 보너스!"
                                   : feedback.earnedPoints >= 30
-                                    ? "🎯 목표 달성 보너스!"
-                                    : "👍 잘했어요!"}
+                                    ? "목표 달성 보너스!"
+                                    : "잘했어요!"}
                               </p>
                               <div className="mt-3 inline-flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">
                                 <span className="text-yellow-900 text-sm font-semibold">
-                                  💰 상점에서 아이템을 구매해보세요!
+                                  <Emo n="Coins" /> 상점에서 아이템을 구매해보세요!
                                 </span>
                               </div>
                             </div>
                           </div>
                         ) : (
                           <div className="bg-gray-100 rounded-xl p-4 text-center">
-                            <div className="text-3xl mb-2">💡</div>
+                            <div className="text-3xl mb-2"><Emo n="Lightbulb" /></div>
                             <p className="text-sm text-gray-600 font-medium">
                               {feedback.score <= 50
                                 ? "50점을 넘으면 포인트를 받을 수 있어요!"
                                 : "80점을 달성하면 포인트를 받을 수 있어요!"}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              고쳐쓰기로 점수를 올려보세요! 💪
+                              고쳐쓰기로 점수를 올려보세요! <Emo n="Dumbbell" />
                             </p>
                           </div>
                         )}
 
-                        {/* 🚀 비용 최적화: 실시간 순위 표시 제거 - 랭킹 탭에서만 확인 가능 */}
+                        {/* 비용 최적화: 실시간 순위 표시 제거 - 랭킹 탭에서만 확인 가능 */}
 
                         {/* 제출한 글 내용 */}
                         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -3619,49 +3611,49 @@ export default function StudentDashboard({ user, userData }) {
                               score: feedback.contentScore,
                               max: 25,
                               color: "from-blue-500 to-blue-600",
-                              icon: "📝",
+                              icon: "📝", // design-gate: emoji-ok — 아이콘 값(그릴 때 <Emo/>)
                             },
                             {
                               label: "주제",
                               score: feedback.topicRelevanceScore,
                               max: 10,
                               color: "from-red-500 to-red-600",
-                              icon: "🎯",
+                              icon: "🎯", // design-gate: emoji-ok — 아이콘 값(그릴 때 <Emo/>)
                             },
                             {
                               label: "구성",
                               score: feedback.structureScore,
                               max: 20,
                               color: "from-purple-500 to-purple-600",
-                              icon: "🏗️",
+                              icon: "🏗️", // design-gate: emoji-ok — 아이콘 값(그릴 때 <Emo/>)
                             },
                             {
                               label: "어휘",
                               score: feedback.vocabularyScore,
                               max: 20,
                               color: "from-pink-500 to-pink-600",
-                              icon: "📚",
+                              icon: "📚", // design-gate: emoji-ok — 아이콘 값(그릴 때 <Emo/>)
                             },
                             {
                               label: "문법",
                               score: feedback.grammarScore,
                               max: 15,
                               color: "from-amber-500 to-amber-600",
-                              icon: "✏️",
+                              icon: "✏️", // design-gate: emoji-ok — 아이콘 값(그릴 때 <Emo/>)
                             },
                             {
                               label: "창의성",
                               score: feedback.creativityScore,
                               max: 10,
                               color: "from-emerald-500 to-emerald-600",
-                              icon: "💡",
+                              icon: "💡", // design-gate: emoji-ok — 아이콘 값(그릴 때 <Emo/>)
                             },
                           ].map((item, idx) => (
                             <div
                               key={idx}
                               className="bg-white rounded-xl border border-gray-200 p-4 text-center hover:shadow-md transition-shadow"
                             >
-                              <div className="text-2xl mb-2">{item.icon}</div>
+                              <div className="text-2xl mb-2 text-emerald-600"><Emo e={item.icon} /></div>
                               <div className="text-xs text-gray-500 mb-1">
                                 {item.label}
                               </div>
@@ -3686,7 +3678,7 @@ export default function StudentDashboard({ user, userData }) {
                         {feedback.wordCountPenalty > 0 && (
                           <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
                             <div className="flex items-start gap-3">
-                              <span className="text-2xl">📏</span>
+                              <span className="text-2xl"><Emo n="Ruler" /></span>
                               <div className="flex-1">
                                 <p className="font-semibold text-orange-800">
                                   글자 수 부족으로 감점되었어요
@@ -3732,7 +3724,7 @@ export default function StudentDashboard({ user, userData }) {
                           >
                             <div className="flex items-center justify-between mb-4">
                               <div className="flex items-center gap-2">
-                                <span className="text-xl">🤖</span>
+                                <span className="text-xl"><Emo n="Bot" /></span>
                                 <h4 className="font-semibold text-gray-800">
                                   AI 활용 분석
                                 </h4>
@@ -3767,7 +3759,7 @@ export default function StudentDashboard({ user, userData }) {
                                         key={idx}
                                         className="inline-flex items-center gap-1 px-3 py-1 bg-white/60 rounded-full text-xs text-emerald-700"
                                       >
-                                        <span>✓</span> {feature}
+                                        <span><Emo n="Check" /></span> {feature}
                                       </span>
                                     ),
                                   )}
@@ -3787,7 +3779,7 @@ export default function StudentDashboard({ user, userData }) {
                                           key={idx}
                                           className="inline-flex items-center gap-1 px-3 py-1 bg-white/60 rounded-full text-xs text-amber-700"
                                         >
-                                          <span>⚠️</span> {feature}
+                                          <span><Emo n="AlertTriangle" /></span> {feature}
                                         </span>
                                       ),
                                     )}
@@ -3798,7 +3790,7 @@ export default function StudentDashboard({ user, userData }) {
                         )}
 
                         {/* 상세 피드백 */}
-                        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 p-6">
+                        <div className="bg-background rounded-xl border border-indigo-100 p-6">
                           <h4 className="font-bold text-lg text-indigo-900 mb-5 flex items-center gap-2">
                             <span className="w-8 h-8 bg-indigo-500 text-white rounded-lg flex items-center justify-center text-sm">
                               AI
@@ -3811,7 +3803,7 @@ export default function StudentDashboard({ user, userData }) {
                             <div className="bg-white rounded-lg p-4 border border-emerald-200">
                               <h5 className="font-semibold text-emerald-700 mb-3 flex items-center gap-2">
                                 <span className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center">
-                                  ✨
+                                  <Emo n="Sparkles" />
                                 </span>
                                 잘한 점
                               </h5>
@@ -3834,7 +3826,7 @@ export default function StudentDashboard({ user, userData }) {
                             <div className="bg-white rounded-lg p-4 border border-orange-200">
                               <h5 className="font-semibold text-orange-700 mb-3 flex items-center gap-2">
                                 <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
-                                  🎯
+                                  <Emo n="Target" />
                                 </span>
                                 이렇게 하면 더 좋아요
                               </h5>
@@ -3861,7 +3853,7 @@ export default function StudentDashboard({ user, userData }) {
                                 <div className="bg-white rounded-lg p-4 border border-purple-200">
                                   <h5 className="font-semibold text-purple-700 mb-3 flex items-center gap-2">
                                     <span className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
-                                      ✍️
+                                      <Emo n="PenLine" />
                                     </span>
                                     문장별 수정 제안
                                   </h5>
@@ -3911,7 +3903,7 @@ export default function StudentDashboard({ user, userData }) {
                                               </span>
                                             </div>
                                             <div className="text-xs text-gray-500 mt-1 pl-1">
-                                              💡 {item.reason}
+                                              <Emo n="Lightbulb" /> {item.reason}
                                             </div>
                                           </div>
                                         </div>
@@ -3919,7 +3911,7 @@ export default function StudentDashboard({ user, userData }) {
                                     )}
                                   </div>
                                   <p className="text-xs text-purple-600 mt-3 flex items-center gap-1">
-                                    <span>⚠️</span>
+                                    <span><Emo n="AlertTriangle" /></span>
                                     수정 제안을 그대로 복사하면 AI 감지에 걸릴
                                     수 있어요. 참고만 하세요!
                                   </p>
@@ -3932,7 +3924,7 @@ export default function StudentDashboard({ user, userData }) {
                                 <div className="bg-white rounded-lg p-4 border border-cyan-200">
                                   <h5 className="font-semibold text-cyan-700 mb-3 flex items-center gap-2">
                                     <span className="w-6 h-6 bg-cyan-100 rounded-full flex items-center justify-center">
-                                      📝
+                                      <Emo n="PenLine" />
                                     </span>
                                     글쓰기 팁
                                   </h5>
@@ -3943,7 +3935,7 @@ export default function StudentDashboard({ user, userData }) {
                                         className="flex items-start gap-2 text-sm text-gray-700"
                                       >
                                         <span className="text-cyan-500 mt-0.5">
-                                          💡
+                                          <Emo n="Lightbulb" />
                                         </span>
                                         {tip}
                                       </li>
@@ -3956,7 +3948,7 @@ export default function StudentDashboard({ user, userData }) {
                             <div className="bg-white rounded-lg p-4 border border-indigo-200">
                               <h5 className="font-semibold text-indigo-700 mb-3 flex items-center gap-2">
                                 <span className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
-                                  💬
+                                  <Emo n="MessageCircle" />
                                 </span>
                                 종합 의견
                               </h5>
@@ -3991,7 +3983,7 @@ export default function StudentDashboard({ user, userData }) {
                                     minScore: requiredScore,
                                     isAssignment: submittedWriting.isAssignment,
                                     previousScore: feedback.score, // 이전 점수 저장 (고쳐쓰기 보너스용)
-                                    previousText: submittedWriting.content, // 🚀 이전 글 텍스트 저장 (AI 비교용)
+                                    previousText: submittedWriting.content, // 이전 글 텍스트 저장 (AI 비교용)
                                   });
                                   // 고쳐쓰기 모드 - AI 제안 저장 (minScore + 원본 내용 포함)
                                   setRewriteMode({
@@ -4010,7 +4002,7 @@ export default function StudentDashboard({ user, userData }) {
                                     500,
                                   );
                                 }}
-                                className="flex-1 min-w-[140px] bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-6 py-4 rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 min-w-[140px] bg-emerald-500 text-white px-6 py-4 rounded-xl font-semibold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 고쳐쓰기
                               </button>
@@ -4035,7 +4027,7 @@ export default function StudentDashboard({ user, userData }) {
                                     500,
                                   );
                                 }}
-                                className="flex-1 min-w-[140px] bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-6 py-4 rounded-xl font-semibold hover:from-indigo-600 hover:to-purple-600 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 min-w-[140px] bg-indigo-500 text-white px-6 py-4 rounded-xl font-semibold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 새 글 쓰기
                               </button>
@@ -4058,10 +4050,10 @@ export default function StudentDashboard({ user, userData }) {
                                   wordCount: submittedWriting.wordCount,
                                   gradeLevel: userData.gradeLevel,
                                   studentName: userData.name,
-                                  minScore: requiredScore, // 🚀 기준점수 전달 (누락 버그 수정)
+                                  minScore: requiredScore, // 기준점수 전달 (누락 버그 수정)
                                   isAssignment: submittedWriting.isAssignment,
-                                  previousScore: feedback.score, // 🚀 이전 점수 저장 (AI 고쳐쓰기 보너스용)
-                                  previousText: submittedWriting.content, // 🚀 이전 글 텍스트 저장 (AI 비교용)
+                                  previousScore: feedback.score, // 이전 점수 저장 (AI 고쳐쓰기 보너스용)
+                                  previousText: submittedWriting.content, // 이전 글 텍스트 저장 (AI 비교용)
                                 });
                                 // 고쳐쓰기 모드 - AI 제안 저장 (minScore + 원본 내용 포함)
                                 setRewriteMode({
@@ -4070,7 +4062,7 @@ export default function StudentDashboard({ user, userData }) {
                                   improvements: feedback.improvements || [],
                                   score: feedback.score,
                                   minScore: requiredScore,
-                                  originalContent: submittedWriting.content, // 🚀 원본 내용 저장 (고쳐쓰기 검증용)
+                                  originalContent: submittedWriting.content, // 원본 내용 저장 (고쳐쓰기 검증용)
                                 });
                                 // 피드백 닫기
                                 setFeedback(null);
@@ -4080,7 +4072,7 @@ export default function StudentDashboard({ user, userData }) {
                                   500,
                                 );
                               }}
-                              className="flex-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-6 py-4 rounded-xl font-semibold hover:from-orange-600 hover:to-amber-600 transition-all shadow-lg shadow-orange-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="flex-1 bg-orange-500 text-white px-6 py-4 rounded-xl font-semibold hover:bg-orange-600 transition-all shadow-lg shadow-orange-200 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               고쳐쓰기
                             </button>
@@ -4098,7 +4090,7 @@ export default function StudentDashboard({ user, userData }) {
                 ) : (
                   <div className="text-center py-12">
                     <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <span className="text-3xl">✍️</span>
+                      <span className="text-3xl"><Emo n="PenLine" /></span>
                     </div>
                     <p className="text-gray-500 mb-2">
                       왼쪽에서 주제를 선택해 주세요.
@@ -4121,7 +4113,7 @@ export default function StudentDashboard({ user, userData }) {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 {/* 통계 카드들 */}
                 <div className="flex gap-4">
-                  <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl px-4 py-3 border border-emerald-200">
+                  <div className="bg-emerald-50 rounded-xl px-4 py-3 border border-emerald-200">
                     <div className="text-xs text-emerald-600 font-medium">
                       달성
                     </div>
@@ -4138,7 +4130,7 @@ export default function StudentDashboard({ user, userData }) {
                       }
                     </div>
                   </div>
-                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl px-4 py-3 border border-orange-200">
+                  <div className="bg-orange-50 rounded-xl px-4 py-3 border border-orange-200">
                     <div className="text-xs text-orange-600 font-medium">
                       미달성
                     </div>
@@ -4159,9 +4151,9 @@ export default function StudentDashboard({ user, userData }) {
               </div>
             </div>
 
-            {/* 🚀 미달성 글 섹션 (기본 표시) */}
+            {/* 미달성 글 섹션 (기본 표시) */}
             {(() => {
-              // 🚀 과제 제목 정규화 함수 (물음표, 공백 등 무시하고 비교)
+              // 과제 제목 정규화 함수 (물음표, 공백 등 무시하고 비교)
               const normalizeTitle = (title) =>
                 (title || "").replace(/[?？!！\s]/g, "").toLowerCase();
 
@@ -4208,7 +4200,7 @@ export default function StudentDashboard({ user, userData }) {
                 return w.score >= requiredScore;
               });
 
-              // 글 카드 렌더링 함수 - 🚀 클릭 시 상세 정보 로드 (DB 읽기 1회)
+              // 글 카드 렌더링 함수 -  클릭 시 상세 정보 로드 (DB 읽기 1회)
               const renderWritingCard = (writing) => {
                 const writingRequiredScore =
                   writing.minScore !== undefined
@@ -4228,7 +4220,7 @@ export default function StudentDashboard({ user, userData }) {
                     onClick={() => handleViewWritingDetail(writing.writingId)}
                   >
                     <div
-                      className={`px-6 py-4 ${isPassed ? "bg-gradient-to-r from-emerald-50 to-white" : "bg-gradient-to-r from-orange-50 to-white"}`}
+                      className={`px-6 py-4 ${isPassed ? "bg-emerald-50 to-white" : "bg-orange-50 to-white"}`}
                     >
                       <div className="flex justify-between items-start">
                         <div>
@@ -4236,7 +4228,7 @@ export default function StudentDashboard({ user, userData }) {
                             <span
                               className={`px-2 py-0.5 rounded-full text-xs font-semibold ${isPassed ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}
                             >
-                              {isPassed ? "✅ 달성" : "🔄 미달성"}
+                              {isPassed ? "달성" : "미달성"}
                             </span>
                             <span className="text-xs text-gray-500">
                               목표: {writingRequiredScore}점
@@ -4272,7 +4264,7 @@ export default function StudentDashboard({ user, userData }) {
                           </div>
                         </div>
                       </div>
-                      {/* 🚀 미달성 글: 고쳐쓰기 버튼 (상세보기 안 열어도 바로 표시) */}
+                      {/* 미달성 글: 고쳐쓰기 버튼 (상세보기 안 열어도 바로 표시) */}
                       {!isPassed && (
                         <button
                           onClick={async (e) => {
@@ -4309,7 +4301,7 @@ export default function StudentDashboard({ user, userData }) {
                               minScore: writingRequiredScore,
                               isAssignment: writingDetail.isAssignment || false,
                               previousScore: writing.score,
-                              previousText: writingDetail.content || "", // 🚀 이전 글 텍스트 저장 (AI 비교용)
+                              previousText: writingDetail.content || "", // 이전 글 텍스트 저장 (AI 비교용)
                             });
                             setRewriteMode({
                               detailedFeedback:
@@ -4323,14 +4315,14 @@ export default function StudentDashboard({ user, userData }) {
                             setSelectedWritingDetail(null);
                             handleTabChange("write");
                           }}
-                          className="mt-3 w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2.5 rounded-xl font-semibold hover:from-orange-600 hover:to-amber-600 transition-all shadow-md"
+                          className="mt-3 w-full bg-orange-500 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-orange-600 transition-all shadow-md"
                         >
-                          ✏️ 고쳐쓰기
+                          <Emo n="Pencil" /> 고쳐쓰기
                         </button>
                       )}
                     </div>
 
-                    {/* 🚀 상세 정보 (클릭 시에만 표시 - DB 읽기 1회) */}
+                    {/* 상세 정보 (클릭 시에만 표시 - DB 읽기 1회) */}
                     {isSelected && detail && (
                       <>
                         <div className="px-6 py-4">
@@ -4399,7 +4391,7 @@ export default function StudentDashboard({ user, userData }) {
                             {detail.analysis.wordCountPenalty > 0 && (
                               <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 text-xs text-orange-700">
                                 <span>
-                                  📏 글자 수 감점: 항목합계{" "}
+                                  <Emo n="Ruler" /> 글자 수 감점: 항목합계{" "}
                                   {(detail.analysis.contentScore || 0) +
                                     (detail.analysis.topicRelevanceScore || 0) +
                                     (detail.analysis.structureScore || 0) +
@@ -4426,7 +4418,7 @@ export default function StudentDashboard({ user, userData }) {
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="font-medium text-xs">
-                                    🤖 AI 활용 분석
+                                    <Emo n="Bot" /> AI 활용 분석
                                   </span>
                                   <span
                                     className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
@@ -4444,7 +4436,7 @@ export default function StudentDashboard({ user, userData }) {
                               </div>
                             )}
                             <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded-xl">
-                              💬 {detail.analysis.overallFeedback}
+                              <Emo n="MessageCircle" /> {detail.analysis.overallFeedback}
                             </p>
                           </div>
                         )}
@@ -4460,14 +4452,14 @@ export default function StudentDashboard({ user, userData }) {
                   <div className="space-y-4">
                     <h3 className="text-lg font-bold text-orange-700 flex items-center gap-2">
                       <span className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                        🔄
+                        <Emo n="RefreshCw" />
                       </span>
                       미달성 글 ({failedWritings.length}개)
                     </h3>
                     {failedWritings.length === 0 ? (
                       <div className="bg-white shadow rounded-2xl p-8 text-center">
                         <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <span className="text-2xl">🎉</span>
+                          <span className="text-2xl"><Emo n="PartyPopper" /></span>
                         </div>
                         <p className="text-gray-600 font-medium">
                           미달성 글이 없습니다. 대단해요!
@@ -4482,11 +4474,11 @@ export default function StudentDashboard({ user, userData }) {
                   <div className="mt-6">
                     <button
                       onClick={() => setShowPassedWritings(!showPassedWritings)}
-                      className="w-full bg-gradient-to-r from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between transition-all"
+                      className="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between transition-all"
                     >
                       <div className="flex items-center gap-3">
                         <span className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white text-lg">
-                          ✅
+                          <Emo n="CheckCircle2" />
                         </span>
                         <div className="text-left">
                           <h3 className="text-lg font-bold text-emerald-700">
@@ -4527,14 +4519,14 @@ export default function StudentDashboard({ user, userData }) {
                                   className="w-full px-4 py-2.5 pl-10 bg-white border border-emerald-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
                                 />
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400">
-                                  🔍
+                                  <Emo n="Search" />
                                 </span>
                                 {passedWritingsSearch && (
                                   <button
                                     onClick={() => setPassedWritingsSearch("")}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
                                   >
-                                    ✕
+                                    <Emo n="X" />
                                   </button>
                                 )}
                               </div>
@@ -4594,7 +4586,7 @@ export default function StudentDashboard({ user, userData }) {
                                           )
                                         }
                                       >
-                                        <div className="p-3 bg-gradient-to-r from-emerald-50 to-white">
+                                        <div className="p-3 bg-emerald-50 to-white">
                                           <div className="flex justify-between items-start gap-2">
                                             <div className="min-w-0 flex-1">
                                               <h4 className="font-bold text-gray-900 text-sm truncate">
@@ -4699,7 +4691,7 @@ export default function StudentDashboard({ user, userData }) {
           <div className="space-y-6">
             {/* 내 순위 카드 */}
             {myRank && (
-              <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 rounded-2xl p-6 shadow-xl text-white">
+              <div className="bg-amber-400 rounded-2xl p-6 shadow-xl text-white">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-amber-100 text-sm mb-1">
@@ -4708,13 +4700,7 @@ export default function StudentDashboard({ user, userData }) {
                     <p className="text-4xl font-black">{myRank}등</p>
                   </div>
                   <div className="text-6xl">
-                    {myRank === 1
-                      ? "🥇"
-                      : myRank === 2
-                        ? "🥈"
-                        : myRank === 3
-                          ? "🥉"
-                          : "🏅"}
+                    <Emo n={myRank <= 3 ? "Medal" : "Award"} className={["", "text-amber-300", "text-gray-200", "text-orange-300"][myRank] || ""} />
                   </div>
                 </div>
               </div>
@@ -4724,8 +4710,8 @@ export default function StudentDashboard({ user, userData }) {
             <div className="bg-white/90 backdrop-blur shadow-lg rounded-2xl p-6 border border-blue-100">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-                  <span className="w-8 h-8 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-lg flex items-center justify-center text-white text-sm">
-                    🏆
+                  <span className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white text-sm">
+                    <Emo n="Trophy" />
                   </span>
                   학급 랭킹
                 </h3>
@@ -4733,7 +4719,7 @@ export default function StudentDashboard({ user, userData }) {
                   <button
                     onClick={() => {
                       if (rankingPeriod !== "weekly") {
-                        setRankingLastLoaded(null); // 🚀 기간 변경 시 캐시 무효화
+                        setRankingLastLoaded(null); // 기간 변경 시 캐시 무효화
                         setRankingPeriod("weekly");
                       }
                     }}
@@ -4748,7 +4734,7 @@ export default function StudentDashboard({ user, userData }) {
                   <button
                     onClick={() => {
                       if (rankingPeriod !== "monthly") {
-                        setRankingLastLoaded(null); // 🚀 기간 변경 시 캐시 무효화
+                        setRankingLastLoaded(null); // 기간 변경 시 캐시 무효화
                         setRankingPeriod("monthly");
                       }
                     }}
@@ -4770,12 +4756,12 @@ export default function StudentDashboard({ user, userData }) {
                 </div>
               ) : rankingData.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  <p className="text-4xl mb-4">📊</p>
+                  <p className="text-4xl mb-4"><Emo n="BarChart3" /></p>
                   <p>아직 랭킹 데이터가 없습니다.</p>
                 </div>
               ) : (
                 (() => {
-                  // 🚀 전체 랭킹 표시 (classes 문서에서 1회 읽기 - 동일 비용)
+                  // 전체 랭킹 표시 (classes 문서에서 1회 읽기 - 동일 비용)
                   const renderRankingCard = (student) => {
                     const isMe = student.studentId === user.uid;
                     const rank = student.rank;
@@ -4784,7 +4770,7 @@ export default function StudentDashboard({ user, userData }) {
                         key={student.studentId}
                         className={`flex items-center gap-4 p-4 rounded-xl transition-all ${
                           isMe
-                            ? "bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 shadow-md"
+                            ? "bg-background border-2 border-blue-300 shadow-md"
                             : "bg-gray-50 hover:bg-gray-100"
                         }`}
                       >
@@ -4792,15 +4778,15 @@ export default function StudentDashboard({ user, userData }) {
                         <div
                           className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
                             rank === 1
-                              ? "bg-gradient-to-br from-yellow-400 to-amber-500 text-white"
+                              ? "bg-yellow-400 text-white"
                               : rank === 2
-                                ? "bg-gradient-to-br from-gray-300 to-gray-400 text-white"
+                                ? "bg-gray-300 text-white"
                                 : rank === 3
-                                  ? "bg-gradient-to-br from-amber-600 to-amber-700 text-white"
+                                  ? "bg-amber-600 text-white"
                                   : "bg-gray-200 text-gray-600"
                           }`}
                         >
-                          {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : rank}
+                          {rank <= 3 ? ["🥇", "🥈", "🥉" /* design-gate: emoji-ok */][rank - 1] : rank}
                         </div>
 
                         {/* 닉네임 */}
@@ -4855,7 +4841,7 @@ export default function StudentDashboard({ user, userData }) {
               {/* 랭킹 점수 설명 */}
               <div className="mt-6 p-4 bg-blue-50 rounded-xl">
                 <p className="text-sm text-blue-800 font-medium mb-2">
-                  📊 랭킹 점수 계산법
+                  <Emo n="BarChart3" /> 랭킹 점수 계산법
                 </p>
                 <p className="text-xs text-blue-600">
                   제출 수 × 10 + 평균 점수 + 통과 수 × 5
@@ -4873,8 +4859,8 @@ export default function StudentDashboard({ user, userData }) {
               {/* 레벨 카드 */}
               <div className="bg-white/90 backdrop-blur shadow-xl rounded-2xl p-6 border border-blue-100">
                 <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
-                  <span className="w-8 h-8 bg-gradient-to-br from-yellow-500 to-amber-500 rounded-lg flex items-center justify-center text-white text-sm">
-                    ⭐
+                  <span className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center text-white text-sm">
+                    <Emo n="Star" />
                   </span>
                   내 레벨
                 </h3>
@@ -4924,9 +4910,9 @@ export default function StudentDashboard({ user, userData }) {
                     </div>
                   )}
                   {!nextLevelInfo.nextLevel && (
-                    <div className="mt-4 p-3 bg-gradient-to-r from-amber-100 to-yellow-100 rounded-xl">
+                    <div className="mt-4 p-3 bg-amber-100 rounded-xl">
                       <p className="text-amber-800 font-bold">
-                        🎉 최고 레벨 달성!
+                        <Emo n="PartyPopper" /> 최고 레벨 달성!
                       </p>
                     </div>
                   )}
@@ -4936,13 +4922,13 @@ export default function StudentDashboard({ user, userData }) {
               {/* 아바타 카드 */}
               <div className="bg-white/90 backdrop-blur shadow-xl rounded-2xl p-6 border border-blue-100">
                 <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
-                  <span className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white text-sm">
-                    👤
+                  <span className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white text-sm">
+                    <Emo n="User" />
                   </span>
                   {previewItem ? "미리보기" : "내 아바타"}
                   {previewItem && (
                     <span className="ml-2 text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full animate-pulse">
-                      👀 {previewItem.item.name}
+                      <Emo n="Eye" /> {previewItem.item.name}
                     </span>
                   )}
                 </h3>
@@ -4956,7 +4942,7 @@ export default function StudentDashboard({ user, userData }) {
                       {(() => {
                         const face = getPreviewFace();
                         const previewHair = getPreviewHair();
-                        // 🎨 은발 등 defaultColor가 있으면 우선 사용
+                        // 은발 등 defaultColor가 있으면 우선 사용
                         const actualHairColor =
                           previewHair.defaultColor ||
                           getPreviewHairColor().color ||
@@ -5250,14 +5236,14 @@ export default function StudentDashboard({ user, userData }) {
                       ) : (
                         <>
                           {getEquippedFace().special && (
-                            <div className="bg-gradient-to-r from-amber-400 to-orange-400 text-white text-[10px] px-2 py-0.5 rounded-full shadow-lg font-bold">
+                            <div className="bg-amber-400 text-white text-[10px] px-2 py-0.5 rounded-full shadow-lg font-bold">
                               SPECIAL
                             </div>
                           )}
                           {/* 사람 얼굴일 때만 의상 배지 */}
                           {getEquippedFace().svgType === "human" &&
                             getEquippedClothes().id !== "cloth1" && (
-                              <div className="bg-gradient-to-r from-blue-400 to-cyan-400 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-lg">
+                              <div className="bg-blue-400 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-lg">
                                 {getEquippedClothes().emoji}
                               </div>
                             )}
@@ -5275,9 +5261,9 @@ export default function StudentDashboard({ user, userData }) {
                         handleEquipItem(previewItem.item, previewItem.category);
                         setPreviewItem(null);
                       }}
-                      className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-medium text-sm hover:from-blue-600 hover:to-cyan-600 transition-all"
+                      className="flex-1 py-2 bg-blue-500 text-white rounded-lg font-medium text-sm hover:bg-blue-600 transition-all"
                     >
-                      ✓ 장착하기
+                      <Emo n="Check" /> 장착하기
                     </button>
                     <button
                       onClick={handleCancelPreview}
@@ -5299,7 +5285,7 @@ export default function StudentDashboard({ user, userData }) {
                       disabled={points < previewItem.item.price}
                       className={`flex-1 py-2 rounded-lg font-medium text-sm transition-all ${
                         points >= previewItem.item.price
-                          ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
+                          ? "bg-amber-500 text-white hover:bg-amber-600"
                           : "bg-gray-200 text-gray-400 cursor-not-allowed"
                       }`}
                     >
@@ -5354,20 +5340,20 @@ export default function StudentDashboard({ user, userData }) {
                         }}
                         className="text-sm text-blue-600 hover:text-blue-700 mt-1"
                       >
-                        ✏️ 닉네임 변경
+                        <Emo n="Pencil" /> 닉네임 변경
                       </button>
                     </div>
                   )}
                 </div>
 
                 {/* 포인트 */}
-                <div className="bg-gradient-to-r from-amber-100 to-yellow-100 rounded-xl p-4 border border-amber-300 shadow-inner">
+                <div className="bg-amber-100 rounded-xl p-4 border border-amber-300 shadow-inner">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 font-medium">
                       보유 포인트
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl">💎</span>
+                      <span className="text-2xl"><Emo n="Gem" /></span>
                       <span className="text-3xl font-black text-amber-600">
                         {points.toLocaleString()}
                       </span>
@@ -5380,8 +5366,8 @@ export default function StudentDashboard({ user, userData }) {
               {/* 업적/뱃지 카드 */}
               <div className="bg-white/90 backdrop-blur shadow-xl rounded-2xl p-6 border border-blue-100">
                 <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
-                  <span className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center text-white text-sm">
-                    🏆
+                  <span className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white text-sm">
+                    <Emo n="Trophy" />
                   </span>
                   업적
                 </h3>
@@ -5393,7 +5379,7 @@ export default function StudentDashboard({ user, userData }) {
                       profileAchievementData.slice(0, 8).map((achievement) => (
                         <div
                           key={achievement.id}
-                          className="flex items-center gap-1 px-3 py-2 bg-gradient-to-r from-amber-100 to-yellow-100 rounded-xl border border-amber-200"
+                          className="flex items-center gap-1 px-3 py-2 bg-amber-100 rounded-xl border border-amber-200"
                           title={achievement.description}
                         >
                           <span className="text-xl">{achievement.emoji}</span>
@@ -5423,7 +5409,7 @@ export default function StudentDashboard({ user, userData }) {
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                       <div
-                        className="h-2 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400"
+                        className="h-2 rounded-full bg-amber-400"
                         style={{
                           width: `${(profileAchievementData.length / ACHIEVEMENTS.length) * 100}%`,
                         }}
@@ -5435,23 +5421,23 @@ export default function StudentDashboard({ user, userData }) {
 
               {/* 마이룸 미리보기 - 3D 스타일 */}
               <div
-                className={`bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 backdrop-blur shadow-2xl rounded-2xl p-6 border ${previewRoomItem ? "border-purple-400 ring-2 ring-purple-400/50" : "border-slate-600"}`}
+                className={`bg-slate-900 backdrop-blur shadow-2xl rounded-2xl p-6 border ${previewRoomItem ? "border-purple-400 ring-2 ring-purple-400/50" : "border-slate-600"}`}
               >
                 <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                  <span className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-lg flex items-center justify-center text-white text-sm shadow-lg shadow-cyan-500/30">
-                    🏠
+                  <span className="w-8 h-8 bg-cyan-400 rounded-lg flex items-center justify-center text-white text-sm shadow-lg shadow-cyan-500/30">
+                    <Emo n="Home" />
                   </span>
                   {previewRoomItem ? "미리보기" : "마이룸"}
                   {previewRoomItem && (
                     <span className="ml-2 text-sm font-normal text-purple-300 bg-purple-900/50 px-2 py-0.5 rounded-full border border-purple-500/30">
-                      👀 {previewRoomItem.item.name}
+                      <Emo n="Eye" /> {previewRoomItem.item.name}
                     </span>
                   )}
                 </h3>
 
                 {/* 3D 아이소메트릭 스타일 방 미리보기 */}
                 <div
-                  className={`relative rounded-2xl overflow-hidden min-h-[280px] bg-gradient-to-b from-indigo-900/50 via-slate-800/80 to-slate-900 ${previewRoomItem ? "ring-4 ring-purple-400/40" : ""}`}
+                  className={`relative rounded-2xl overflow-hidden min-h-[280px] bg-indigo-900 ${previewRoomItem ? "ring-4 ring-purple-400/40" : ""}`}
                   style={{ perspective: "1200px" }}
                 >
                   {/* 배경 하늘/공간 효과 */}
@@ -5471,7 +5457,7 @@ export default function StudentDashboard({ user, userData }) {
                       style={{ animationDelay: "1.5s" }}
                     ></div>
                     {/* 부드러운 글로우 */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-gradient-to-b from-purple-500/10 via-indigo-500/5 to-transparent rounded-full blur-2xl"></div>
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-blue-500 to-transparent rounded-full blur-2xl"></div>
                   </div>
 
                   {/* 3D 방 컨테이너 */}
@@ -5541,7 +5527,7 @@ export default function StudentDashboard({ user, userData }) {
                           })}
                         {getPreviewRoomDecorations().length === 0 && (
                           <div
-                            className="w-14 h-12 bg-gradient-to-br from-amber-200 to-amber-300 rounded-sm border-4 border-amber-600 shadow-xl"
+                            className="w-14 h-12 bg-amber-200 rounded-sm border-4 border-amber-600 shadow-xl"
                             style={{
                               boxShadow:
                                 "0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)",
@@ -5550,7 +5536,7 @@ export default function StudentDashboard({ user, userData }) {
                         )}
                       </div>
                       {/* 코너 몰딩 */}
-                      <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-t from-amber-900/30 to-amber-700/10"></div>
+                      <div className="absolute bottom-0 left-0 right-0 h-3 bg-amber-900"></div>
                     </div>
 
                     {/* 뒷벽 - 오른쪽 패널 */}
@@ -5583,7 +5569,7 @@ export default function StudentDashboard({ user, userData }) {
                             "0 4px 16px rgba(0,0,0,0.4), inset 0 0 20px rgba(135,206,235,0.3)",
                         }}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-br from-sky-300 via-sky-400 to-indigo-400"></div>
+                        <div className="absolute inset-0 bg-sky-300"></div>
                         <div className="absolute inset-0 bg-gradient-to-br from-white/50 via-transparent to-transparent"></div>
                         {/* 창틀 */}
                         <div className="absolute inset-0 border-4 border-slate-500 rounded-md"></div>
@@ -5621,7 +5607,7 @@ export default function StudentDashboard({ user, userData }) {
                         })()}
                       </div>
                       {/* 코너 몰딩 */}
-                      <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-t from-amber-900/30 to-amber-700/10"></div>
+                      <div className="absolute bottom-0 left-0 right-0 h-3 bg-amber-900"></div>
                     </div>
 
                     {/* 바닥 - 3D 효과 강화 */}
@@ -5845,9 +5831,9 @@ export default function StudentDashboard({ user, userData }) {
                           );
                           setPreviewRoomItem(null);
                         }}
-                        className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-medium text-sm hover:from-blue-600 hover:to-cyan-600 transition-all"
+                        className="flex-1 py-2 bg-blue-500 text-white rounded-lg font-medium text-sm hover:bg-blue-600 transition-all"
                       >
-                        ✓ 배치하기
+                        <Emo n="Check" /> 배치하기
                       </button>
                     ) : (
                       <button
@@ -5860,7 +5846,7 @@ export default function StudentDashboard({ user, userData }) {
                         disabled={points < previewRoomItem.item.price}
                         className={`flex-1 py-2 rounded-lg font-medium text-sm transition-all ${
                           points >= previewRoomItem.item.price
-                            ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
+                            ? "bg-amber-500 text-white hover:bg-amber-600"
                             : "bg-gray-200 text-gray-400 cursor-not-allowed"
                         }`}
                       >
@@ -5878,9 +5864,9 @@ export default function StudentDashboard({ user, userData }) {
               </div>
 
               {/* 포인트 획득 방법 */}
-              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200">
+              <div className="bg-background rounded-xl p-4 border border-blue-200">
                 <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                  <span>💡</span> 포인트 획득
+                  <span><Emo n="Lightbulb" /></span> 포인트 획득
                 </h4>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="bg-white rounded-lg p-2 text-center">
@@ -5947,16 +5933,16 @@ export default function StudentDashboard({ user, userData }) {
         {showTemplateModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-              <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-teal-50">
+              <div className="p-6 border-b border-gray-200 bg-emerald-50">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-emerald-900 flex items-center gap-2">
-                    <span className="text-2xl">📋</span> 글쓰기 템플릿 선택
+                    <span className="text-2xl"><Emo n="ClipboardList" /></span> 글쓰기 템플릿 선택
                   </h3>
                   <button
                     onClick={() => setShowTemplateModal(false)}
                     className="text-gray-500 hover:text-gray-700 text-2xl"
                   >
-                    ✕
+                    <Emo n="X" />
                   </button>
                 </div>
                 <p className="text-sm text-emerald-700 mt-2">
@@ -5975,7 +5961,7 @@ export default function StudentDashboard({ user, userData }) {
                           : "border-gray-200 hover:border-emerald-300"
                       }`}
                     >
-                      <span className="text-3xl">{template.emoji}</span>
+                      <span className="text-3xl text-emerald-600"><Emo e={template.emoji} /></span>
                       <h4 className="font-bold text-gray-800 mt-2">
                         {template.name}
                       </h4>

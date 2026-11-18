@@ -1,3 +1,4 @@
+import Emo from "../components/Emo.jsx";
 import { Link } from "react-router-dom";
 
 /**
@@ -13,7 +14,7 @@ export default function Terms() {
             to="/"
             className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700"
           >
-            <span className="text-2xl">🌱</span>
+            <span className="text-2xl"><Emo n="Sprout" /></span>
             <span className="font-bold">ISW 글쓰기 도우미</span>
           </Link>
           <Link
@@ -156,7 +157,7 @@ export default function Terms() {
               </h2>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
                 <p className="text-amber-800 font-medium">
-                  ⚠️ AI 평가 관련 안내
+                  <Emo n="AlertTriangle" /> AI 평가 관련 안내
                 </p>
               </div>
               <ul className="list-disc ml-6 space-y-2">

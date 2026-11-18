@@ -1,3 +1,4 @@
+/* design-gate: ignore-file — 아바타·상점·레벨 «콘텐츠»(아이템 그림·배지 데이터)라 화면 장식 이모지가 아니다(2026-11-18 리디자인) */
 // 🚀 Lazy-loadable RoomSVG components
 // Separates RoomSVG.jsx (1129 lines) into its own chunk
 // Only loaded when profile tab is first opened

@@ -4,38 +4,97 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --primary: #4f46e5;
-  --primary-soft: #eef2ff;
-  --ink: #0f172a;
+/* 싹 디자인 토큰 2층(semantics) — A «새싹 벤토». 값은 HSL 세 수(쉼표 없이) — tailwind 의 hsl(var(--x)) 가 읽는다 */
+@layer base {
+  :root {
+    --background: 75 20% 96%;      /* #F7F8F3 따뜻한 흰 바탕 */
+    --foreground: 135 15% 11%;     /* #18211B */
+    --card: 0 0% 100%;
+    --card-foreground: 135 15% 11%;
+    --primary: 146 72% 31%;        /* #16874A 새싹 초록 — 흰 글씨 4.57:1 */
+    --primary-foreground: 0 0% 100%;
+    --accent: 215 75% 48%;         /* #1F6FD8 하늘 — 흰 글씨 4.86:1 */
+    --accent-foreground: 0 0% 100%;
+    --muted: 80 13% 92%;           /* #EFF1EA */
+    --muted-foreground: 135 5% 37%;/* #5B6660 */
+    --border: 84 15% 88%;          /* #E3E7DC */
+    --ring: 146 72% 31%;
+    --destructive: 358 68% 54%;    /* #D93A3F — 흰 글씨 4.54:1 */
+    --destructive-foreground: 0 0% 100%;
+    --warning: 36 88% 59%;         /* #F2A93B */
+    --warning-foreground: 30 60% 15%;
+    --radius: 1.5rem;
+  }
+  .dark {
+    --background: 130 14% 7%;      /* #101511 */
+    --foreground: 105 18% 94%;     /* #EEF3EC */
+    --card: 133 14% 11%;           /* #18201A */
+    --card-foreground: 105 18% 94%;
+    --primary: 145 55% 51%;        /* #3CC777 */
+    --primary-foreground: 140 37% 8%;
+    --accent: 214 88% 66%;         /* #5B9DF5 */
+    --accent-foreground: 215 50% 10%;
+    --muted: 133 12% 16%;
+    --muted-foreground: 135 8% 67%;/* #A3B0A6 */
+    --border: 135 12% 19%;         /* #2A352D */
+    --ring: 145 55% 51%;
+    --destructive: 358 100% 71%;
+    --destructive-foreground: 0 0% 10%;
+    --warning: 36 88% 66%;
+    --warning-foreground: 30 60% 10%;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: 'Pretendard', 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-size: 16px;
+    letter-spacing: -0.01em;
+    word-break: keep-all;
+  }
+  h1, h2, h3 { letter-spacing: -0.025em; }
+  :focus-visible { outline: 3px solid hsl(var(--ring) / 0.55); outline-offset: 2px; border-radius: 10px; }
+  ::selection { background: hsl(var(--primary) / 0.18); }
+  code { font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Pretendard', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.12), transparent 25%),
-    radial-gradient(circle at 90% 10%, rgba(236, 72, 153, 0.12), transparent 25%),
-    radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.12), transparent 25%),
-    #f8fafc;
-  color: var(--ink);
-}
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+@layer components {
+  /* 예전 «유리 카드» 자리는 단색 벤토 카드로(2024식 blur 를 걷어낸다) */
+  .glass-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 1px 2px rgb(20 30 20 / 0.05), 0 8px 24px rgb(20 30 20 / 0.06);
+    border-radius: 1.5rem;
+  }
+  .bento-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 1.5rem;
+    box-shadow: 0 1px 2px rgb(20 30 20 / 0.05), 0 8px 24px rgb(20 30 20 / 0.06);
+  }
+  .btn-primary {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    background: hsl(var(--primary)); color: hsl(var(--primary-foreground));
+    font-weight: 700; border-radius: 1rem; padding: .8rem 1.25rem; min-height: 48px;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-secondary {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    background: hsl(var(--card)); color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border)); font-weight: 700; border-radius: 1rem; padding: .8rem 1.25rem; min-height: 48px;
+  }
+  .field {
+    width: 100%; background: hsl(var(--background)); border: 1px solid hsl(var(--border));
+    border-radius: 1rem; padding: .85rem 1rem; font-size: 16px; color: hsl(var(--foreground));
+  }
+  .field:focus { outline: none; border-color: hsl(var(--primary)); box-shadow: 0 0 0 4px hsl(var(--primary) / 0.15); }
 }

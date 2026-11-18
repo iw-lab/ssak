@@ -1,3 +1,4 @@
+/* design-gate: ignore-file — 아바타·상점·레벨 «콘텐츠»(아이템 그림·배지 데이터)라 화면 장식 이모지가 아니다(2026-11-18 리디자인) */
 // 실사 스타일 SVG 아바타 컴포넌트
 import React from "react";
 

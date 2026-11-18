@@ -67,7 +67,7 @@ const ItemRevealModal = memo(({ item, onClose, onEquip }) => {
                 ${config.particles ? 'particle-container' : ''}`}
               style={{ '--bg': 'transparent' }}
             >
-              <span className="text-6xl drop-shadow-lg">{item.emoji || '🎁'}</span>
+              <span className="text-6xl drop-shadow-lg">{item.emoji || '🎁' /* design-gate: emoji-ok */}</span>
             </div>
 
             {/* 레어리티 라인 */}

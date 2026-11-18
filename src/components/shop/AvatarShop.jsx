@@ -1,3 +1,4 @@
+import Emo from "../Emo.jsx";
 import { useState, useMemo, useCallback, memo } from 'react';
 import {
   AVATAR_ITEMS, ROOM_ITEMS, SHOP_CATEGORIES, CATEGORY_NAMES, CATEGORY_ICONS,
@@ -176,7 +177,7 @@ const AvatarShop = memo(({
     }
 
     // 기본 이모지
-    return <span className="text-3xl">{item.emoji || '🎁'}</span>;
+    return <span className="text-3xl">{item.emoji || '🎁'}</span>; // design-gate: emoji-ok — 아이콘 값(그릴 때 <Emo/>)
   }, [shopCategory, activeTab, RoomSVGComponents]);
 
   const subcategories = shopCategory === 'avatar'
@@ -191,7 +192,7 @@ const AvatarShop = memo(({
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
               <span className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center text-white text-sm shadow-md">
-                🛒
+                <Emo n="ShoppingCart" />
               </span>
               상점
             </h3>
@@ -206,12 +207,12 @@ const AvatarShop = memo(({
                     : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
                 }`}
               >
-                📚 컬렉션 {collectionStats.owned}/{collectionStats.total}
+                <Emo n="BookOpen" /> 컬렉션 {collectionStats.owned}/{collectionStats.total}
               </button>
 
               {/* 포인트 */}
               <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg px-3 py-1.5 flex items-center gap-1">
-                <span className="text-amber-500 text-sm">💎</span>
+                <span className="text-amber-500 text-sm"><Emo n="Gem" /></span>
                 <span className="text-sm font-bold text-amber-700">{points.toLocaleString()}P</span>
               </div>
             </div>
@@ -227,7 +228,7 @@ const AvatarShop = memo(({
                   : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
               }`}
             >
-              👤 아바타
+              <Emo n="User" /> 아바타
             </button>
             <button
               onClick={() => { setShopCategory('room'); setActiveTab('furniture'); }}
@@ -237,7 +238,7 @@ const AvatarShop = memo(({
                   : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
               }`}
             >
-              🏠 마이룸
+              <Emo n="Home" /> 마이룸
             </button>
           </div>
         </div>
@@ -333,7 +334,7 @@ const AvatarShop = memo(({
                     <span className={`font-bold ${set.progress.complete ? 'text-green-600' : 'text-gray-400'}`}>
                       {set.progress.owned}/{set.progress.total}
                     </span>
-                    {set.progress.complete && <span className="text-green-500">✓</span>}
+                    {set.progress.complete && <span className="text-green-500"><Emo n="Check" /></span>}
                   </div>
                 );
               })}
@@ -367,7 +368,7 @@ const AvatarShop = memo(({
           {/* 빈 상태 */}
           {shopItems.length === 0 && (
             <div className="text-center py-12 text-gray-400">
-              <span className="text-4xl block mb-2">🔍</span>
+              <span className="text-4xl block mb-2"><Emo n="Search" /></span>
               <p className="text-sm">해당 조건의 아이템이 없습니다</p>
               <button
                 onClick={() => setFilterRarity('all')}
