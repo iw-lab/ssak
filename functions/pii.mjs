@@ -37,6 +37,10 @@ const COMMON2 = new Set(("다리 다른 다시 다들 다만 다행 다음 다�
   "택시 학년 한복 해변 행운 향기 현재 형님 호수 화장 환자 활동 황금 효과 후배 훈련 희생 시간 이유 도서 동생 가족 하지 오늘 내일 어제 반장 회장 수요 주변 동네 공부 소풍 " +
   "숙소 우리 가게 가위 강당 경험 계획 고민 과자 교과 기차 나무 노력 도움 마을 마음 무늬 미소 반지 발표 방학 보리 부모 사과 사진 상장 생일 선생 성당 세종 소나 소년 소녀 수첩 " +
   "숲속 시골 신기 아이 어린 여름 연극 영양 오리 우정 위로 유행 의자 이야 인기 자유 장소 전학 정성 조심 주제 지혜 진로 창작 축제 친척 칭찬 태도 토끼 평화 피아 학생 한번 해결 혼자 화요 효자").split(/\s+/));
+// 두 글자 성 — 뒤에 이름 두 글자가 오면 4글자 이름(독고형제·남궁민수·황보은지)
+const COMPOUND = /^(독고|남궁|황보|제갈|선우|서문|사공|동방|어금|망절|소봉|장곡|공손|정해|강전)/;
+// 성 뒤 3글자 고유어 이름(이사랑·한별이…)을 알아보는 끝말 — 흔한 고유어 이름 낱말
+const NATIVE3 = ["사랑", "하늘", "보람", "슬기", "아름", "나래", "누리", "다솜", "한별", "새봄", "가람", "초롱", "빛나", "한결", "여름", "가을", "바다", "노을", "이슬", "별님", "다운", "하랑", "라온", "시온", "단비", "새별", "은별", "샛별", "봄이", "솔이"];
 const ROLE_WORDS = "친구|짝꿍|짝|단짝|베프|절친|동생|남동생|여동생|형|오빠|언니|누나|사촌|사촌동생|반장|부반장|회장|부회장|선배|후배|막내|첫째|둘째|조카";
 // 역할 낱말 뒤에 와도 이름이 아닌 것
 const NOT_NAME_AFTER_ROLE = new Set("같이 함께 모두 둘이 셋이 넷이 집에 집을 집에서 생일 생일에 생일을 들과 들이 들은 들도 들을 들의 들한테 들에게 하고 랑 와 이랑 에게 한테 덕분에 때문에 사이 사이에 사이가 얼굴 마음 말을 말이 말에 손을 방에 방을 방이 이름 이름은 이름이 학교 학교에 반에 반은 반이 한명 한 명 두명 두 명 모두가 모두와 없이 처럼 보다 만큼 거 것 꺼".split(/\s+/));
@@ -113,33 +117,44 @@ export function maskPII(text, opts = {}) {
   // 4) 이름 — 문맥이 확실한 것부터
   const markName = (n, force = false) => { if (n && n.length >= 2 && (force || !PUBLIC_FIGURES.has(n))) names.add(n); };
   // «이름은 김민재», «내 이름은 민재»
-  sub(new RegExp(`(이름은|이름이|이름을|성함은|별명은|별명이)(\\s*["'“‘]?\\s*)(${H}{2,3}?)(?=입니다|이에요|예요|이야|야|이고|이라고|라고|이에|에요|이|가|는|$|[^가-힣])`, "g"), "name",
+  sub(new RegExp(`(이름은|이름이|이름을|성함은|별명은|별명이)(\\s*["'“‘]?\\s*)(${H}{2,4}?)(?=입니다|이에요|예요|이야|야|이고|이라고|라고|이에|에요|이|가|는|$|[^가-힣])`, "g"), "name",
     (m, a, sp, n, off, all) => (/(강아지|고양이|햄스터|토끼|물고기|거북이|앵무새|인형|별명|팀|책|영화|노래|게임|캐릭터|로봇|반려견|반려묘)\s*$/.test(all.slice(Math.max(0, off - 8), off)) || /^(무엇|뭐|뭘|모르|비밀|없|알|지어|바꾸|부르|짓|정말|너무|참|아주|특이|예쁘|멋|좋|이상|길|짧|어려|쉬|김치)/.test(n) ? m : (markName(n, true), `${a}${sp}${MASK}`)));
   // «저는/나는 김민재입니다»
   sub(new RegExp(`(저는|나는|난|전|제가|내가)(\\s+)(${H}{2,4})(입니다|이에요|예요|이야|야|이고|라고|이라고)`, "g"), "name",
     (m, a, sp, n, e) => (/^(학생|초등|어린|친구|사람|아이|막내|첫째|둘째|형|누나|언니|오빠|동생|반장|회장|남자|여자|\d)/.test(n) || n.length < 2 ? m : (markName(n, true), `${a}${sp}${MASK}${e}`)));
   // «친구 민수가», «동생 지우랑»
-  sub(new RegExp(`(^|[^가-힣])(${ROLE_WORDS})(\\s+)(${H}{2,3})(${PART})?(?=$|[\\s.,!?~…"'”’)])`, "g"), "name",
+  sub(new RegExp(`(^|[^가-힣])(${ROLE_WORDS})(\\s+)(${H}{2,4})(${PART})?(?=$|[\\s.,!?~…"'”’)])`, "g"), "name",
     (m, pre, role, sp, n, p = "") => {
+      if (n.length === 4 && !COMPOUND.test(n) && /[가는를을은이도와의랑]$/.test(n) && !NATIVE3.some((w) => n.slice(1).endsWith(w))) { p = n.slice(-1) + (p || ""); n = n.slice(0, 3); } // «최지우가»
       if (n.length === 3 && n.endsWith("이")) { p = "이" + (p || ""); n = n.slice(0, 2); } // «하윤이랑»
       const whole = n + (p || "");
       if (NOT_NAME_AFTER_ROLE.has(n) || NOT_NAME_AFTER_ROLE.has(whole) || /^(들|이랑|하고|와|과|에게|한테|이|가|은|는)/.test(n)) return m;
-      const okChars = [...n].every((c, i) => GIVEN.has(c) || (i === 0 && n.length === 3 && SURNAMES.includes(c)));
+      const okChars = n.length === 4 ? SURNAMES.includes(n[0]) || COMPOUND.test(n) : [...n].every((c, i) => GIVEN.has(c) || (i === 0 && n.length === 3 && SURNAMES.includes(c)));
       if (!okChars || COMMON2.has(n)) return m; // «회장 선거에»·«친구 사이»
       markName(n); return `${pre}${role}${sp}${MASK}${p || ""}`;
     });
   // «김민재 선생님», «박쌤», «민수 씨»
-  sub(new RegExp(`(^|[^가-힣])(${H}{1,3})(\\s?)(${TITLE_SUFFIX})(?=$|[^가-힣]|${PART}|께|께서)`, "g"), "name",
+  sub(new RegExp(`(^|[^가-힣])(${H}{1,4})(\\s?)(${TITLE_SUFFIX})(?=$|[^가-힣]|${PART}|께|께서)`, "g"), "name",
     (m, pre, n, sp, title) => {
       if (NOT_NAME_BEFORE_TITLE.has(n)) return m;
       if (n.length === 1 && !SURNAMES.includes(n)) return m; // «박쌤»처럼 성만 있는 경우만
       if (n.length >= 2 && /[은는을를에의도가이]$/.test(n) && !(n.length === 3 && GIVEN.has(n[1]) && GIVEN.has(n[2]) && SURNAMES.includes(n[0]))) return m; // «오늘은 선생님»
       if (n.length === 2 && !(SURNAMES.includes(n[0]) && GIVEN.has(n[1])) && !(GIVEN.has(n[0]) && GIVEN.has(n[1]))) return m;
       if (n.length === 3 && !(SURNAMES.includes(n[0]) && GIVEN.has(n[1]) && GIVEN.has(n[2]))) return m;
+      if (n.length === 4 && !(COMPOUND.test(n) || SURNAMES.includes(n[0]))) return m;
       if ((title === "님" || title === "씨") && n.length < 2) return m;
       if ((title === "님" || title === "씨") && !SURNAMES.includes(n[0])) return m; // «하느님»·«부처님»·«아저씨» 같은 낱말
       if (/^(아저|아가|부처|하느|하나|선녀|임금|원님|사또|도령|아줌|아주머|아기)/.test(n)) return m;
       markName(n.length >= 2 ? n : ""); return `${pre}${MASK}${sp}${title}`;
+    });
+  // 두 글자 성(독고·남궁·황보·제갈·선우…)+이름 2글자 — «독고형제가» (2026-11-18 사용자)
+  sub(new RegExp(`(^|[^가-힣])(${COMPOUND.source.slice(1)}${H}{2})(${PART})?(?=$|[^가-힣])`, "g"), "name",
+    (m, pre, n, p = "") => { markName(n, true); return `${pre}${MASK}${p || ""}`; });
+  // 성+고유어 이름 3글자 — «김이사랑이», «박하늘별» (이름 낱말 목록에 있는 것만 — «김치찌개» 같은 말 방지)
+  sub(new RegExp(`(^|[^가-힣])([${SURNAMES}])(${H}{3})(${PART})?(?=$|[^가-힣])`, "g"), "name",
+    (m, pre, s0, g, p = "") => {
+      if (!NATIVE3.some((w) => g.endsWith(w))) return m;
+      markName(s0 + g, true); return `${pre}${MASK}${p || ""}`;
     });
   // 성+이름 3글자(뒤 두 글자가 이름 글자) + 조사/끝
   sub(new RegExp(`(^|[^가-힣])([${SURNAMES}])(${H})(${H})(입니다|이에요|예요|이예요|이라고|라고|이고|이었|였|이었어요|${PART})?(?=$|[^가-힣])`, "g"), "name",
@@ -184,6 +199,7 @@ export function maskPII(text, opts = {}) {
   for (const n of names) {
     all.add(n);
     if (n.length === 3 && SURNAMES.includes(n[0])) all.add(n.slice(1));
+    if (n.length === 4) all.add(COMPOUND.test(n) ? n.slice(2) : n.slice(1)); // «독고형제»→«형제», «김이사랑»→«이사랑»
   }
   const nameList = [...all].filter((x) => x && x !== MASK).sort((a, b) => b.length - a.length);
   if (nameList.length) {
