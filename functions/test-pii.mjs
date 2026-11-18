@@ -37,6 +37,11 @@ const LEAK = [
   ["역삼동 123-45에 산다.", ["역삼동", "123-45"]],
   ["우리 집은 101동에 있다.", ["101동"]],
   ["이름은 김연아. 김연아는 3학년이다.", ["김연아"]],
+  // 2026-11-18 사용자 «두 글자 이름도 있잖아» — 한 번만 나와도
+  ["민지가 우리 집에 왔다.", ["민지"]],
+  ["오늘 수빈이랑 떡볶이를 먹었다.", ["수빈"]],
+  ["쉬는 시간에 하준한테 공을 빌렸다.", ["하준"]],
+  ["예린이는 피아노를 잘 친다.", ["예린"]],
 ];
 const KEEP = [
   "강아지가 꼬리를 흔들었다.", "고양이가 야옹 하고 울었다.", "오늘은 정말 신나는 하루였다.", "이야기를 들려주셨다.",
@@ -83,7 +88,13 @@ for (const f of readdirSync(new URL("./test-data/", import.meta.url)).filter((x)
       if (NOT_PII.test(core)) continue;
       if (out.includes(core)) { fail++; console.log(`❌ ${f} LEAK [${core}] ${out}`); }
     }
-    if (!pii.length && out !== text) { over++; console.log(`⚠️ ${f} OVER ${out}`); }
+    // 책 속 인물 이름(«지우», «하리»)은 사람 이름과 구별할 수 없어 가려져도 된다(2026-11-18 사용자: 놓침보다 지나친 가림) —
+    //   그 밖의 낱말이 가려지면 실패
+    if (!pii.length && out !== text) {
+      const masked = [...text.matchAll(/[가-힣]+/g)].map((m) => m[0]).filter((w) => !out.includes(w));
+      const bad = masked.filter((w) => !/^[가-힣]{2}(가|는|처럼|를|이|의|랑|도)?$/.test(w) || /^(신나|나오|식초|한자)/.test(w));
+      if (bad.length) { over++; console.log(`⚠️ ${f} OVER [${bad.join(",")}] ${out}`); }
+    }
   }
 }
 console.log(`LEAK ${LEAK.length - fail}/${LEAK.length} 막음 · KEEP ${KEEP.length - over}/${KEEP.length} 그대로`);
