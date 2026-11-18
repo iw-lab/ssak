@@ -39,3 +39,4 @@ ui-debug.log
 
 # 에뮬레이터용 비밀(시험 값)
 .secret.local
+.redesign-live-ok
