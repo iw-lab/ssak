@@ -283,7 +283,7 @@ export default function PrivacyPolicy() {
               </h2>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-gray-700">
-                  <strong>개인정보 보호책임자:</strong> «싹» 운영자
+                  <strong>개인정보 보호책임자(담당 부서):</strong> «싹» 운영팀 — 개인정보 보호·고충 처리 담당
                 </p>
                 <p className="text-gray-700">
                   <strong>이메일:</strong> simssijjang@gmail.com
