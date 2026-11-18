@@ -95,111 +95,80 @@ const SYSTEM_PROMPTS = {
 // 💰 비용 최적화 & 사용량 추적 시스템
 // ============================================
 
-// 일일 API 호출 제한 (학교당)
-const DAILY_API_LIMIT_PER_SCHOOL = 1000; // 학교당 하루 1000회
-const DAILY_API_LIMIT_PER_USER = 50; // 사용자당 하루 50회
-
-// 사용량 캐시 (메모리)
-const usageCache = new Map();
-const USAGE_CACHE_TTL = 60000; // 1분
-
-/**
- * 사용량 기록 및 확인
- */
-async function checkAndRecordUsage(userId, schoolId) {
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-  const userKey = `usage_${userId}_${today}`;
-  const schoolKey = `usage_school_${schoolId}_${today}`;
-
-  // 캐시 확인
-  const cachedUser = usageCache.get(userKey);
-  const cachedSchool = usageCache.get(schoolKey);
-
-  let userCount = cachedUser?.count || 0;
-  let schoolCount = cachedSchool?.count || 0;
-
-  // 캐시가 오래되었으면 DB에서 조회
-  if (!cachedUser || Date.now() - cachedUser.timestamp > USAGE_CACHE_TTL) {
-    try {
-      const userUsageDoc = await db.collection("usage").doc(userKey).get();
-      userCount = userUsageDoc.exists ? userUsageDoc.data().count : 0;
-    } catch (e) {
-      console.warn("[사용량 조회 실패] 사용자:", e.message);
-    }
+// ============================================
+// 🔒 AI 문지기 (2026-11-18 점검): 전엔 «로그인만» 하면 도움·조언·AI탐지·표절을 횟수 제한 없이 부를 수 있었고,
+//   제출 첨삭의 하루 제한도 계정마다라 가입을 여러 번 하면 무한이었다(가입 화면은 누구나 연다). 캐시+덮어쓰기라 동시 호출로도 샜다.
+//   이제 ① 승인된 교사·학급에 든 학생·관리자만 ② 사람·학급(교사)·전체 하루 횟수를 트랜잭션으로 함께 센다.
+//   관리자 화면의 한도(settings/usageLimits perUser·perSchool)를 실제로 쓴다(perSchool = 학급·교사 단위).
+// ============================================
+const DAILY_API_LIMIT_PER_USER = 50; // 사람당 하루(모든 AI 기능 합산)
+const DAILY_API_LIMIT_PER_SCHOOL = 800; // 학급(학생 전체) 또는 교사 한 명 하루 — 이름은 관리자 화면 호환
+const DAILY_API_LIMIT_GLOBAL = 5000; // 서비스 전체 하루 — 마지막 둑(요금 폭주 차단)
+// 관리자 값 검증: 정수 0~상한(0 = 그 칸 AI 멈춤), 그 밖의 값은 기본값. 터무니없이 큰 값(1e20)으로 상한이 사라지지 않게.
+const LIMIT_MAX = { perUser: 1000, perScope: 20000, global: 100000 };
+let limitCache = { at: 0, v: null };
+async function readLimits() {
+  if (Date.now() - limitCache.at < 30000 && limitCache.v) return limitCache.v;
+  const dflt = { perUser: DAILY_API_LIMIT_PER_USER, perScope: DAILY_API_LIMIT_PER_SCHOOL, global: DAILY_API_LIMIT_GLOBAL };
+  try {
+    const d = (await db.doc("settings/usageLimits").get()).data() || {};
+    const pick = (n, k) => (Number.isSafeInteger(n) && n >= 0 && n <= LIMIT_MAX[k] ? n : dflt[k]);
+    const v = { perUser: pick(d.perUser, "perUser"), perScope: pick(d.perSchool, "perScope"), global: pick(d.global, "global") };
+    limitCache = { at: Date.now(), v };
+    return v;
+  } catch (e) {
+    // 읽기 실패: 직전에 읽은 값을 쓰고, 기본값을 캐시에 굳히지 않는다(관리자가 낮춘 한도가 풀리지 않게)
+    console.warn("[한도 읽기 실패]", e.message);
+    return limitCache.v || dflt;
   }
+}
+const kstDay = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
-  if (!cachedSchool || Date.now() - cachedSchool.timestamp > USAGE_CACHE_TTL) {
-    try {
-      const schoolUsageDoc = await db.collection("usage").doc(schoolKey).get();
-      schoolCount = schoolUsageDoc.exists ? schoolUsageDoc.data().count : 0;
-    } catch (e) {
-      console.warn("[사용량 조회 실패] 학교:", e.message);
-    }
-  }
+/** AI 를 부르기 전 반드시 통과. 통과 못 하면 HttpsError 를 던진다.
+ *  사람 횟수는 트랜잭션으로 정확히(한 계정 동시 연타도 못 넘게), 학급·전체는 문서 하나에 여러 사람이 몰리므로
+ *  트랜잭션 경합을 피해 «읽고 확인 → 원자적 증가»(동시 요청 수만큼만 넘칠 수 있음). */
+async function guardAI(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  const uid = request.auth.uid;
+  const u = (await db.doc(`users/${uid}`).get()).data();
+  let scope = null;
+  if (u?.role === "super_admin") scope = "admin";
+  else if (u?.role === "teacher" && u.approved === true) scope = `teacher_${uid}`;
+  else if (u?.role === "student" && typeof u.classCode === "string" && /^[A-Za-z0-9]{1,20}$/.test(u.classCode)) scope = `class_${u.classCode}`;
+  if (!scope) throw new HttpsError("permission-denied", "승인된 선생님과 학급 학생만 AI 첨삭을 쓸 수 있어요.");
 
-  // 제한 확인
-  if (userCount >= DAILY_API_LIMIT_PER_USER) {
-    return {
-      allowed: false,
-      reason: `일일 사용량 초과 (${userCount}/${DAILY_API_LIMIT_PER_USER}회). 내일 다시 이용해주세요.`,
-    };
-  }
-  if (schoolCount >= DAILY_API_LIMIT_PER_SCHOOL) {
-    return {
-      allowed: false,
-      reason: `학교 일일 사용량 초과. 내일 다시 이용해주세요.`,
-    };
-  }
+  const lim = await readLimits();
+  const day = kstDay();
+  const isAdmin = scope === "admin";
+  const userRef = db.collection("usage").doc(`usage_${uid}_${day}`);
+  const scopeRef = db.collection("usage").doc(`scope_${scope}_${day}`);
+  const allRef = db.collection("usage").doc(`global_${day}`);
+  const n = (x) => (x.exists ? x.data().count || 0 : 0);
 
-  // 사용량 기록 (비동기, 실패해도 진행)
-  const newUserCount = userCount + 1;
-  const newSchoolCount = schoolCount + 1;
+  const [ss, gs] = await Promise.all([scopeRef.get(), allRef.get()]);
+  if (n(gs) >= lim.global) throw new HttpsError("resource-exhausted", "오늘은 AI 첨삭이 너무 많이 쓰여 잠시 쉬어요. 내일 다시 써 주세요.");
+  if (!isAdmin && n(ss) >= lim.perScope) throw new HttpsError("resource-exhausted", "우리 반이 오늘 쓸 수 있는 AI 횟수를 다 썼어요. 내일 다시 써 주세요.");
 
-  // 캐시 업데이트
-  usageCache.set(userKey, { count: newUserCount, timestamp: Date.now() });
-  usageCache.set(schoolKey, { count: newSchoolCount, timestamp: Date.now() });
-
-  // DB 업데이트 (비동기)
-  db.collection("usage")
-    .doc(userKey)
-    .set(
-      {
-        userId,
-        count: newUserCount,
-        date: today,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    )
-    .catch((e) => console.warn("[사용량 기록 실패]", e.message));
-
-  if (schoolId) {
-    db.collection("usage")
-      .doc(schoolKey)
-      .set(
-        {
-          schoolId,
-          count: newSchoolCount,
-          date: today,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      )
-      .catch((e) => console.warn("[학교 사용량 기록 실패]", e.message));
-  }
-
-  return {
-    allowed: true,
-    userCount: newUserCount,
-    schoolCount: newSchoolCount,
-  };
+  // 교사는 자기 범위(teacher_uid)가 곧 한 사람이라 사람 한도 대신 범위 한도만 — 반 전체 표절·AI 검사가 50번에 막히지 않게
+  const userCap = isAdmin || scope.startsWith("teacher_") ? Infinity : lim.perUser;
+  const at = FieldValue.serverTimestamp();
+  await db.runTransaction(async (tx) => {
+    const us = await tx.get(userRef);
+    if (n(us) >= userCap) throw new HttpsError("resource-exhausted", `오늘은 AI 를 ${lim.perUser}번 다 썼어요. 내일 다시 써 주세요.`);
+    tx.set(userRef, { userId: uid, count: n(us) + 1, date: day, updatedAt: at }, { merge: true });
+  });
+  await Promise.all([
+    scopeRef.set({ scope, count: FieldValue.increment(1), date: day, updatedAt: at }, { merge: true }),
+    allRef.set({ scope: "global", count: FieldValue.increment(1), date: day, updatedAt: at }, { merge: true }),
+  ]);
+  return { scope };
 }
 
 /**
  * API 비용 추적 (월별 집계)
  */
 async function trackApiCost(userId, schoolId, tokenCount = 0) {
-  const yearMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  const yearMonth = kstDay().slice(0, 7); // YYYY-MM (한국 날짜 — 하루 한도와 같은 기준)
   const costKey = `cost_${yearMonth}`;
 
   // 예상 비용 계산 (GPT-4o-mini 기준: $0.15/1M input tokens)
@@ -1305,13 +1274,6 @@ exports.analyzeWriting = onCall(
       throw new HttpsError("invalid-argument", "텍스트와 주제가 필요합니다.");
     }
 
-    // 💰 사용량 확인 (비용 폭증 방지)
-    const usageCheck = await checkAndRecordUsage(userId, schoolId);
-    if (!usageCheck.allowed) {
-      console.log(`[사용량 초과] ${userId}: ${usageCheck.reason}`);
-      throw new HttpsError("resource-exhausted", usageCheck.reason);
-    }
-
     // 🚀 서버 측 무의미한 글 감지 (AI 호출 전 차단 = API 비용 0원)
     const qualityCheck = checkWritingQuality(text, idealWordCount);
     if (qualityCheck.isInvalid) {
@@ -1345,6 +1307,9 @@ exports.analyzeWriting = onCall(
       console.log(`[캐시 히트] 분석 결과 재사용 - API 비용 절감`);
       return cached.data;
     }
+
+    // 💰 AI 문지기 — 무의미한 글·캐시 답(AI 0원)은 세지 않고, AI 를 부르기 직전에만 센다
+    await guardAI(request);
 
     try {
       const gradeNames = {
@@ -1918,6 +1883,7 @@ ${previousTexts}
   "details": "분석 결과 설명"
 }`;
 
+      await guardAI(request); // 🔒 AI 문지기 — 승인 교사·학급 학생만, 하루 횟수
       const responseText = await callAI(prompt, {
             masked: true,
         systemPrompt: SYSTEM_PROMPTS.writingAnalyzer,
@@ -1934,6 +1900,7 @@ ${previousTexts}
 
       return JSON.parse(jsonMatch[0]);
     } catch (error) {
+      if (error instanceof HttpsError) throw error; // 문지기(권한·횟수) 거절은 그대로 알린다
       console.error("표절 검사 에러:", error);
       return {
         isPlagiarized: false,
@@ -2209,6 +2176,7 @@ JSON만 응답:
   }
 }`;
 
+    await guardAI(request); // 🔒 AI 문지기 — 승인 교사·학급 학생만, 하루 횟수
     const responseText = await callAI(prompt, {
             masked: true,
       systemPrompt: SYSTEM_PROMPTS.writingAnalyzer,
@@ -2259,6 +2227,7 @@ JSON만 응답:
 
     return parsed;
   } catch (error) {
+    if (error instanceof HttpsError) throw error; // 문지기(권한·횟수) 거절은 그대로 알린다
     console.error("AI 사용 감지 에러:", error);
     // 에러 시에도 통계 분석 결과 반환
     return {
@@ -2338,6 +2307,7 @@ JSON:{"expandIdeas":["구체적아이디어1","2","3"],"detailSuggestions":[{"pa
       };
 
       const prompt = prompts[helpType] || prompts.default;
+      await guardAI(request); // 🔒 AI 문지기 — 승인 교사·학급 학생만, 하루 횟수
       const responseText = await callAI(prompt, {
             masked: true,
         systemPrompt: SYSTEM_PROMPTS.writingHelper,
@@ -2359,6 +2329,7 @@ JSON:{"expandIdeas":["구체적아이디어1","2","3"],"detailSuggestions":[{"pa
 
       return parsed;
     } catch (error) {
+      if (error instanceof HttpsError) throw error; // 문지기(권한·횟수) 거절은 그대로 알린다
       console.error("글쓰기 도움 에러:", error);
       throw new HttpsError("internal", `도움 요청 실패: ${error.message}`);
     }
@@ -2400,6 +2371,7 @@ exports.getQuickAdvice = onCall(
       const prompt = `${grade} "${topic}" 글:"""${text.slice(0, 300)}"""
 ${mode}. 친근하고 구체적으로 1-2문장. JSON:{"advice":"구체적조언","emoji":"이모지1개","nextHint":"다음에쓸수있는내용힌트"}`;
 
+      await guardAI(request); // 🔒 AI 문지기 — 승인 교사·학급 학생만, 하루 횟수
       const responseText = await callAI(prompt, {
             masked: true,
         systemPrompt: SYSTEM_PROMPTS.quickAdvice,
@@ -2410,6 +2382,7 @@ ${mode}. 친근하고 구체적으로 1-2문장. JSON:{"advice":"구체적조언
 
       return JSON.parse(jsonMatch[0]);
     } catch (error) {
+      if (error instanceof HttpsError) throw error; // 문지기(권한·횟수) 거절은 그대로 알린다
       console.error("실시간 조언 에러:", error);
       return { advice: "잘 하고 있어요!", emoji: "👍" };
     }
@@ -2480,6 +2453,7 @@ ${categoryText}
   ]
 }`;
 
+      await guardAI(request); // 🔒 AI 문지기 — 승인 교사·학급 학생만, 하루 횟수
       const text = await callAI(prompt, {
             masked: true,
         systemPrompt: SYSTEM_PROMPTS.topicGenerator,
@@ -2494,6 +2468,7 @@ ${categoryText}
       const parsed = JSON.parse(jsonMatch[0]);
       return parsed;
     } catch (error) {
+      if (error instanceof HttpsError) throw error; // 문지기(권한·횟수) 거절은 그대로 알린다
       console.error("AI 주제 생성 에러:", error);
       throw new HttpsError("internal", `주제 생성 실패: ${error.message}`);
     }
@@ -3968,8 +3943,8 @@ exports.getUsageStats = onCall(async (request) => {
     throw new HttpsError("permission-denied", "슈퍼 관리자 권한이 필요합니다.");
   }
 
-  const today = new Date().toISOString().split("T")[0];
-  const yearMonth = new Date().toISOString().slice(0, 7);
+  const today = kstDay(); // 하루 한도와 같은 한국 날짜
+  const yearMonth = today.slice(0, 7);
 
   // 오늘 사용량
   const todayUsageSnap = await db
@@ -3999,9 +3974,7 @@ exports.getUsageStats = onCall(async (request) => {
   // 일별 사용량 (최근 7일)
   const dailyUsage = [];
   for (let i = 0; i < 7; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = new Date(Date.now() + 9 * 3600e3 - i * 86400e3).toISOString().slice(0, 10);
 
     const daySnap = await db
       .collection("usage")

@@ -1377,6 +1377,8 @@ export default function StudentDashboard({ user, userData }) {
       setLastAdviceTime(now);
     } catch (error) {
       console.error("실시간 조언 에러:", error);
+      // 횟수·권한 거절은 아이에게 이유를 말해 준다(조용히 끝나면 버튼이 고장 난 줄 안다)
+      if (error?.code === "functions/resource-exhausted" || error?.code === "functions/permission-denied") alert(error.message);
     } finally {
       setLoadingQuickAdvice(false);
     }

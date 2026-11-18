@@ -49,6 +49,15 @@
    "match": "process\\.exit\\(bad",
    "cost_s": "60",
    "note": "학생 일괄 생성 실제 함수 시험 — 아이디가 교사 메일 도메인·이름을 빌리지 않음, 짧은 아이디 로그인, 번호 겹침 없음(scripts/test-student-accounts.mjs)"
+  },
+  {
+   "id": "ai-guard",
+   "stage": "deploy",
+   "class": "cost-abuse",
+   "mode": "block",
+   "match": "process\\.exit\\(bad",
+   "cost_s": "60",
+   "note": "AI 문지기 — 미승인·학급 없는 계정 차단, 사람/학급/전체 하루 한도, 동시 호출로 못 넘김(scripts/test-ai-guard.mjs, 가짜 Anthropic 으로 실제 호출 수 셈)"
   }
  ]
 }
