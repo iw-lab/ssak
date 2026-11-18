@@ -46,7 +46,7 @@ export default function Register() {
 
     try {
       await registerUser(formData.email, formData.password, formData.role, {
-        name: formData.name
+        ...(formData.name.trim() ? { name: formData.name.trim() } : {})
       });
 
       if (formData.role === ROLES.TEACHER) {
@@ -75,8 +75,8 @@ export default function Register() {
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <ErrorNote>{error}</ErrorNote>
-        <Field label="이름">
-          <input name="name" type="text" required className="field" placeholder="이름을 입력하세요" value={formData.name} onChange={handleChange} />
+        <Field label="학생에게 보일 이름" hint="선택 · 비우면 «선생님»">
+          <input name="name" type="text" maxLength={20} className="field" placeholder="예: 김선생님" value={formData.name} onChange={handleChange} />
         </Field>
         <Field label="이메일">
           <input name="email" type="email" autoComplete="username" required className="field" placeholder="이메일을 입력하세요" value={formData.email} onChange={handleChange} />

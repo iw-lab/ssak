@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { loginUser } from "../services/authService";
 import AuthShell, { Field, ErrorNote } from "../components/AuthShell";
+import { toLoginEmail } from "../config/studentId";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -16,7 +17,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await loginUser(email, password);
+      await loginUser(toLoginEmail(email), password);
       navigate("/");
     } catch (err) {
       setError(err.message || "로그인에 실패했습니다.");
@@ -33,8 +34,8 @@ export default function Login() {
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <ErrorNote>{error}</ErrorNote>
-        <Field label="이메일">
-          <input type="email" autoComplete="username" required className="field" placeholder="이메일을 입력하세요" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Field label="아이디 또는 이메일">
+          <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" required className="field" placeholder="학생은 아이디, 선생님은 이메일" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
         <Field label="비밀번호">
           <input type="password" autoComplete="current-password" required className="field" placeholder="비밀번호를 입력하세요" value={password} onChange={(e) => setPassword(e.target.value)} />

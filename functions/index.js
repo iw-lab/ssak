@@ -38,6 +38,7 @@ const AI_MODEL = defineString("AI_MODEL", { default: "claude-haiku-5-5" });
 // 🔒 국외(미국) AI 로 보내는 학생 글은 반드시 pii.mjs 로 이름·주소·학교·전화를 «ㅇㅇㅇ»로 가린 뒤 보낸다.
 //   callAI 는 { masked: true } 없이는 부르지 못한다 — 가리지 않은 길이 생기지 않게.
 const piiModule = import("./pii.mjs");
+const STUDENT_EMAIL_DOMAIN = "isw-writing.web.app"; // 학생 로그인 아이디용(메일 서버 없음). src/config/studentId.js 와 같아야 한다
 const MAX_AI_TEXT = 12000; // 아이 글은 보통 3천 자 이하 — 아주 긴 입력(숫자 수만 자 등)으로 가림 정규식을 오래 붙잡지 못하게
 async function maskForAI(text, extraWords) {
   if (String(text || "").length > MAX_AI_TEXT) throw new HttpsError("invalid-argument", `글이 너무 길어요(${MAX_AI_TEXT.toLocaleString()}자까지).`);
@@ -506,9 +507,7 @@ const syncSuperAdminClassesSummary = async () => {
             if (teacherDoc.exists) {
               const teacherData = teacherDoc.data();
               teacherNames[teacherId] =
-                teacherData.name ||
-                teacherData.email?.split("@")[0] ||
-                "알 수 없음";
+                teacherData.name || "선생님";
 
               // 해당 선생님의 모든 classes 문서에 teacherName 저장 (다음부터 조회 불필요)
               const classesToUpdate = classesData.filter(
@@ -578,7 +577,7 @@ const syncStudentClassInfo = async (classCode) => {
       if (teacherDoc.exists) {
         const teacherData = teacherDoc.data();
         teacherName =
-          teacherData.name || teacherData.email?.split("@")[0] || "알 수 없음";
+          teacherData.name || "선생님";
       }
     }
 
@@ -749,7 +748,7 @@ exports.batchCreateStudents = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "classCode가 필요합니다.");
   }
 
-  if (!total || total < 1 || total > MAX_STUDENTS_PER_CLASS) {
+  if (!Number.isInteger(total) || total < 1 || total > MAX_STUDENTS_PER_CLASS) {
     throw new HttpsError(
       "invalid-argument",
       `생성 인원은 1~${MAX_STUDENTS_PER_CLASS}명이어야 합니다.`,
@@ -815,40 +814,51 @@ exports.batchCreateStudents = onCall(async (request) => {
     );
   }
 
-  const cleanedPrefix =
-    (prefix || classCode || "student")
-      .toString()
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "") || "student";
-  const domain = (teacherData.email || "").split("@")[1] || "example.com";
+  // 학생 아이디 = 학급코드+번호 @ 우리 도메인(메일함 없음). 교사 메일 도메인을 쓰면 학교가 드러나고
+  // abc001@gmail.com 처럼 남의 실제 주소와 겹친다(2026-11-18 최소수집 점검). prefix 는 더 받지 않는다.
+  void prefix;
+  const idBase = String(classCode).toLowerCase().replace(/[^a-z0-9]/g, "") || "student";
   const now = new Date().toISOString();
 
   const results = [];
   const newStudents = [];
+  let nextSeq = currentStudents + 1;
+
+  // 학생에게 보일 이름은 «담당 교사» 것 — 관리자가 대신 만들어도 관리자 이름이 들어가면 안 된다
+  let classTeacherName = classData.teacherName || null;
+  if (!classTeacherName) {
+    const owner = classData.teacherId === teacherUid ? teacherData : (await db.doc(`users/${classData.teacherId}`).get()).data();
+    classTeacherName = owner?.name || "선생님";
+  }
 
   for (let i = 1; i <= total; i++) {
-    const seq = String(currentStudents + i).padStart(3, "0");
-    const email = `${cleanedPrefix}${seq}@${domain}`;
     const password = kidPassword();
-    const displayName = `학생${seq}`;
+    let userRecord = null;
+    let email = "";
+    let displayName = "";
+    // 지운 학생 자리 때문에 번호가 겹치면 다음 번호로(최대 60번 시도)
+    for (let tries = 0; tries < 60 && !userRecord; tries++) {
+      const seq = String(nextSeq++).padStart(2, "0");
+      email = `${idBase}${seq}@${STUDENT_EMAIL_DOMAIN}`;
+      displayName = `학생${seq}`;
+      try {
+        userRecord = await getAuth().createUser({ email, password, displayName });
+      } catch (e) {
+        if (e.code !== "auth/email-already-exists") {
+          results.push({ email, password: null, status: "skipped", message: e.message });
+          break;
+        }
+      }
+    }
+    if (!userRecord) continue;
 
     try {
-      const userRecord = await getAuth().createUser({
-        email,
-        password,
-        displayName,
-      });
-
       // 🚀 학생 userData에 classInfo 캐시 (로그인 시 DB 읽기 0회!)
       const classInfo = {
         classCode: classCode,
         className: classData.className || classCode,
         teacherId: classData.teacherId,
-        teacherName:
-          classData.teacherName ||
-          teacherData.name ||
-          teacherData.email?.split("@")[0] ||
-          "알 수 없음",
+        teacherName: classTeacherName,
         gradeLevel: classData.gradeLevel,
         assignmentSummary: classData.assignmentSummary || [],
         weeklyRanking: classData.weeklyRanking || null,

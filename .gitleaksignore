@@ -1,0 +1,6 @@
+# Firebase 웹 config apiKey(공개) — .gitleaks.toml 설명 참고
+scripts/upload-ssakdb-client.cjs:gcp-api-key:14
+scripts/upload-ssakdb-rest.cjs:gcp-api-key:11
+scripts/check-ssakdb-client.cjs:gcp-api-key:10
+scripts/check-firestore-ssakdb.cjs:gcp-api-key:9
+scripts/test-ssakdb-function.cjs:gcp-api-key:13

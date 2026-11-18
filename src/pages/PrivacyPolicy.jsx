@@ -81,7 +81,7 @@ export default function PrivacyPolicy() {
                         학생
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        학생 번호 이름(예: 학생001)·별명, 학년, 학급, 로그인 아이디
+                        학생 번호 이름(예: 학생01)·별명, 학년, 학급, 로그인 아이디(학급코드+번호 — 교사가 일괄 생성, 학생 실명·연락처·학교명은 받지 않음)
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         회원 식별, 학습 관리
@@ -95,7 +95,7 @@ export default function PrivacyPolicy() {
                         교사
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        이름, 이메일, 담당 학급
+                        이메일(로그인용), 담당 학급, 학생에게 보일 이름(선택)
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         회원 식별, 학급 관리
@@ -283,10 +283,10 @@ export default function PrivacyPolicy() {
               </h2>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-gray-700">
-                  <strong>개인정보 보호책임자:</strong> ISW 글쓰기 도우미 운영팀
+                  <strong>개인정보 보호책임자:</strong> «싹» 운영자
                 </p>
                 <p className="text-gray-700">
-                  <strong>이메일:</strong> privacy@isw-writing.com
+                  <strong>이메일:</strong> simssijjang@gmail.com
                 </p>
                 <p className="text-gray-700">
                   <strong>문의 시간:</strong> 평일 09:00 - 18:00

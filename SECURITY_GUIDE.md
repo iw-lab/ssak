@@ -36,7 +36,7 @@
 1. [Google Cloud Console](https://console.cloud.google.com/) 접속
 2. 프로젝트 선택: `isw-writing`
 3. 좌측 메뉴 → "API 및 서비스" → "사용자 인증 정보"
-4. Firebase API 키 찾기: `AIzaSyA6qDbJR5taBJvrpFNFE8_eIL1v9e9joGM`
+4. Firebase API 키 찾기: `(Firebase 웹 키 — 콘솔에서 확인)`
 5. "키 제한사항" 섹션에서 다음 설정:
 
 #### 애플리케이션 제한사항
@@ -57,7 +57,7 @@ HTTP 리퍼러(웹사이트)
 ### 단계 2: Gemini API 키 제한
 
 1. [Google AI Studio](https://makersuite.google.com/app/apikey) 접속
-2. API 키 선택: `AIzaSyDKslMDXo5JVja3EsdOOJozeyzphvIMPRs`
+2. API 키 선택: `(키 값은 여기 적지 않는다 — AI Studio 에서 확인)`
 3. "Edit API key" 클릭
 4. 다음 제한사항 설정:
 

@@ -40,6 +40,15 @@
    "match": "length \\? 1 : 0",
    "cost_s": "40",
    "note": "Firestore 규칙 공격 시험 64종 — 다른 반·다른 학교·낯선 가입자 접근 차단 + 정상 조회 허용(scripts/test-rules-privacy.mjs)"
+  },
+  {
+   "id": "student-account-minimal",
+   "stage": "deploy",
+   "class": "data-minimization",
+   "mode": "block",
+   "match": "process\\.exit\\(bad",
+   "cost_s": "60",
+   "note": "학생 일괄 생성 실제 함수 시험 — 아이디가 교사 메일 도메인·이름을 빌리지 않음, 짧은 아이디 로그인, 번호 겹침 없음(scripts/test-student-accounts.mjs)"
   }
  ]
 }

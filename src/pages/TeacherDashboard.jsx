@@ -189,7 +189,6 @@ export default function TeacherDashboard({ user, userData }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState("assignments");
   const [batchCount, setBatchCount] = useState(10);
-  const [batchPrefix, setBatchPrefix] = useState("");
   const [batchResults, setBatchResults] = useState([]);
   const [batchMessage, setBatchMessage] = useState("");
   const [batchLoading, setBatchLoading] = useState(false);
@@ -1261,7 +1260,6 @@ export default function TeacherDashboard({ user, userData }) {
       const result = await batchCreateStudents({
         classCode: batchTargetClass,
         count: batchCount,
-        prefix: batchPrefix || batchTargetClass,
         gradeLevel: onboardingClass.gradeLevel,
       });
 
@@ -1425,7 +1423,6 @@ export default function TeacherDashboard({ user, userData }) {
       const res = await batchCreateStudents({
         classCode: targetClass.classCode,
         count: total,
-        prefix: batchPrefix || targetClass.classCode,
         gradeLevel: targetClass.gradeLevel,
       });
 
@@ -1614,7 +1611,7 @@ export default function TeacherDashboard({ user, userData }) {
                 <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs">
                   <Emo n="GraduationCap" />
                 </span>
-                {userData.name}
+                {userData.name || "선생님"}
               </p>
               <p className="text-xs text-gray-500">{userData.email}</p>
             </div>
@@ -1795,11 +1792,10 @@ export default function TeacherDashboard({ user, userData }) {
                     학생 일괄 추가
                   </h3>
                   <p className="text-sm text-gray-600">
-                    기본 아이디를 입력하면 자동으로 순번이 붙습니다 (예: student
-                    → student001, student002, ...)
+                    아이디는 학급코드 뒤에 번호가 붙습니다 (예: ab3k9z01, ab3k9z02, ...). 학생 이름·연락처는 받지 않아요.
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    생성 예시: 아이디 student001@도메인 / 비밀번호는 학생마다 무작위(예: kpm4827) — 아래 표를 인쇄해 나눠 주세요
+                    학생은 로그인 화면에 아이디만 치면 됩니다 / 비밀번호는 학생마다 무작위(예: kpm4827) — 아래 표를 인쇄해 나눠 주세요
                   </p>
                 </div>
 
@@ -1831,18 +1827,6 @@ export default function TeacherDashboard({ user, userData }) {
                       max={40}
                       value={batchCount}
                       onChange={(e) => setBatchCount(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      기본 아이디
-                    </label>
-                    <input
-                      type="text"
-                      value={batchPrefix}
-                      onChange={(e) => setBatchPrefix(e.target.value)}
-                      placeholder="예: isw"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
@@ -1901,7 +1885,7 @@ export default function TeacherDashboard({ user, userData }) {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-4 py-2 text-left font-semibold text-gray-600">
-                            이메일
+                            아이디
                           </th>
                           <th className="px-4 py-2 text-left font-semibold text-gray-600">
                             초기 비밀번호
@@ -1918,7 +1902,7 @@ export default function TeacherDashboard({ user, userData }) {
                         {batchResults.map((item, idx) => (
                           <tr key={`${item.email}-${idx}`}>
                             <td className="px-4 py-2 text-gray-800">
-                              {item.email}
+                              {item.email?.split("@")[0]}
                             </td>
                             <td className="px-4 py-2 font-mono text-gray-700">
                               {item.password || "-"}
@@ -3239,7 +3223,7 @@ export default function TeacherDashboard({ user, userData }) {
                     <div className="flex-1">
                       <p className="font-medium">{student.studentName}</p>
                       <p className="text-xs text-blue-600 font-mono">
-                        {studentDetails[student.studentId]?.email ||
+                        {studentDetails[student.studentId]?.email?.split("@")[0] ||
                           "로딩 중..."}
                       </p>
                       <p className="text-xs text-gray-500">
@@ -3296,7 +3280,7 @@ export default function TeacherDashboard({ user, userData }) {
                         <thead>
                           <tr className="border-b border-emerald-200">
                             <th className="px-2 py-2 text-left text-emerald-900">
-                              이메일
+                              아이디
                             </th>
                             <th className="px-2 py-2 text-left text-emerald-900">
                               비밀번호
@@ -3311,7 +3295,7 @@ export default function TeacherDashboard({ user, userData }) {
                                 className="border-b border-emerald-100"
                               >
                                 <td className="px-2 py-2 font-mono text-xs">
-                                  {account.email}
+                                  {account.email?.split("@")[0]}
                                 </td>
                                 <td className="px-2 py-2 font-mono text-xs font-semibold text-emerald-800">
                                   {account.password}
@@ -4093,7 +4077,7 @@ export default function TeacherDashboard({ user, userData }) {
                 </button>
               </div>
               <p className="text-emerald-100 mb-4">
-                {userData.name} 선생님, 환영합니다! 간단한 설정으로 바로
+                {userData.name ? `${userData.name} ` : ""}선생님, 환영합니다! 간단한 설정으로 바로
                 시작해보세요.
               </p>
               {/* 단계 인디케이터 */}
@@ -4275,18 +4259,6 @@ export default function TeacherDashboard({ user, userData }) {
                       </p>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        아이디 접두어 (선택)
-                      </label>
-                      <input
-                        type="text"
-                        value={batchPrefix}
-                        onChange={(e) => setBatchPrefix(e.target.value)}
-                        placeholder="예: 6-1 → 아이디: 6-1_student01"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      />
-                    </div>
 
                     {batchResults.length > 0 && (
                       <div className="bg-green-50 border border-green-200 rounded-xl p-4">
