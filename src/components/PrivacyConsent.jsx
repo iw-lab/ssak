@@ -105,8 +105,7 @@ export default function PrivacyConsent({ onConsent, userName }) {
                 <div>
                   <h4 className="font-semibold text-gray-900">3. 보유 기간</h4>
                   <p className="mt-1">
-                    학년도 종료 후 1년간 보관, 이후 자동 삭제 (교육기관 요청 시
-                    즉시 삭제 가능)
+                    학년도가 끝나면(매년 3월 1일) 자동 삭제, 요청하면 즉시 삭제
                   </p>
                 </div>
                 <div>
@@ -115,11 +114,11 @@ export default function PrivacyConsent({ onConsent, userName }) {
                   </h4>
                   <ul className="list-disc ml-5 mt-1 space-y-1">
                     <li>
-                      암호화된 데이터베이스 저장 (Firebase Security Rules)
+                      서울 리전에 암호화 저장, 담임 선생님만 볼 수 있게 접근 규칙 적용
                     </li>
                     <li>HTTPS 통신으로 전송 구간 암호화</li>
                     <li>학생 정보는 해당 학급 교사만 열람 가능</li>
-                    <li>제3자 제공 없음 (AI 평가 제외)</li>
+                    <li>AI 첨삭을 위해 가린 글을 미국 Anthropic 으로, 로그인 정보를 미국 Google 로 보냄(자세한 건 개인정보처리방침 제3조)</li>
                   </ul>
                 </div>
               </div>

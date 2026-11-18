@@ -39,31 +39,51 @@ service cloud.firestore {
              get(/databases/$(database)/documents/classes/$(studentData.classCode)).data.teacherId == request.auth.uid;
     }
 
+    // 이 반의 담임인가(승인된 교사만) — 2026-11-18 개인정보 전수 점검: 교사는 «자기 반»만 본다
+    function isApprovedTeacherOfClass(classCode) {
+      return isApprovedTeacher() && classCode != null &&
+             get(/databases/$(database)/documents/classes/$(classCode)).data.teacherId == request.auth.uid;
+    }
+    // 학생 본인이 속한 반인가
+    function isStudentOfClass(classCode) {
+      return classCode != null && isStudent() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('classCode', null) == classCode;
+    }
+
     // Users collection
     match /users/{userId} {
       // Users can read their own document, teachers/admins can read any
+      // 본인 · 슈퍼관리자 · 그 학생의 담임만(승인 대기 교사·다른 학교 교사는 못 본다)
       allow read: if isAuthenticated() &&
-                     (request.auth.uid == userId || isTeacher() || isSuperAdmin());
+                     (request.auth.uid == userId || isSuperAdmin() ||
+                      (resource.data.role == 'student' && isApprovedTeacherOfClass(resource.data.classCode)));
 
       // Users can create their own document during registration
       // OR approved teachers can create student accounts (batch creation)
       // Security: role must be 'student' or 'teacher' only (prevent privilege escalation)
+      // 교사는 스스로 «승인됨»으로 가입할 수 없다(승인은 슈퍼관리자만) — 2026-11-18 전수 점검에서 뚫려 있었다
       allow create: if isAuthenticated() &&
                        ((request.auth.uid == userId &&
                          request.resource.data.uid == userId &&
-                         request.resource.data.role in ['student', 'teacher']) ||
-                        (isApprovedTeacher() && request.resource.data.role == 'student'));
+                         // 학생 반 배정은 선생님(일괄 생성 함수)만 — 스스로 «B반 학생»이라 적고 명단을 읽지 못하게
+                         ((request.resource.data.role == 'student' && request.resource.data.get('classCode', null) == null) ||
+                          (request.resource.data.role == 'teacher' && request.resource.data.get('approved', false) == false))) ||
+                        (request.resource.data.role == 'student' &&
+                         isApprovedTeacherOfClass(request.resource.data.get('classCode', null))));
 
       // Users can update their own document OR super admin can update any
       // OR approved teachers can update student classCode (for class operations)
       // Security: users cannot change their own role or approved status
       allow update: if isAuthenticated() &&
                        ((request.auth.uid == userId &&
-                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'approved', 'isTestStudent'])) ||
+                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'approved', 'isTestStudent', 'classCode'])) ||
                         isSuperAdmin() ||
-                        (isApprovedTeacher() &&
-                         resource.data.role == 'student' &&
-                         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'approved', 'uid', 'email']))));
+                        (resource.data.role == 'student' &&
+                         isApprovedTeacherOfClass(resource.data.classCode) &&
+                         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'approved', 'uid', 'email'])) &&
+                         // 반을 옮길 땐 옮겨 갈 반도 내 반이어야(학생 계정을 남의 반에 심어 명단을 보는 길 차단) — 빼기(null)는 허용
+                         (request.resource.data.get('classCode', null) == null ||
+                          isApprovedTeacherOfClass(request.resource.data.get('classCode', null)))));
 
       // Only super admin can delete users
       allow delete: if isSuperAdmin();
@@ -71,11 +91,17 @@ service cloud.firestore {
 
     // Classes collection
     match /classes/{classCode} {
-      // Anyone authenticated can read classes
-      allow read: if isAuthenticated();
+      // 담임 · 그 반 학생 · 슈퍼관리자만(명단이 들어 있다). 없는 코드 확인(새 반 만들 때 중복 검사)은 교사에게 허용
+      allow read: if isAuthenticated() &&
+                     (isSuperAdmin() ||
+                      (resource == null && isTeacher()) ||
+                      (resource != null && resource.data.teacherId == request.auth.uid && isApprovedTeacher()) ||
+                      isStudentOfClass(classCode));
 
       // Only approved teachers can create classes
+      // 지운 반 코드는 다시 못 만든다(남은 옛 글·학생이 새 담임에게 보이는 길) — 함수가 retiredClassCodes 에 적는다
       allow create: if isApprovedTeacher() &&
+                       !exists(/databases/$(database)/documents/retiredClassCodes/$(classCode)) &&
                        request.resource.data.teacherId == request.auth.uid &&
                        request.resource.data.students.size() == 0 &&
                        request.resource.data.maxStudents == 40;
@@ -83,15 +109,19 @@ service cloud.firestore {
       // Only the teacher who owns the class or super admin can update
       // Students can only modify the students array (joining/leaving class)
       allow update: if isAuthenticated() &&
-                       (resource.data.teacherId == request.auth.uid ||
+                       ((resource.data.teacherId == request.auth.uid && isApprovedTeacher() &&
+                         request.resource.data.teacherId == resource.data.teacherId) ||
                         isSuperAdmin() ||
-                        (isStudent() &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['students', 'weeklyRanking', 'monthlyRanking', 'rankingUpdatedAt'])));
+                        (isStudentOfClass(classCode) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weeklyRanking', 'monthlyRanking', 'rankingUpdatedAt'])));
 
-      // Only the teacher who owns the class or super admin can delete
-      allow delete: if isAuthenticated() &&
-                       (resource.data.teacherId == request.auth.uid ||
-                        isSuperAdmin());
+      // 반 삭제는 학생·글까지 함께 지우는 서버 함수(deleteClassWithStudents)로만 — 문서만 지우면 옛 글이 남는다
+      allow delete: if isSuperAdmin();
+    }
+
+    // 지운 반 코드 목록 — 서버(관리자 SDK)만 쓴다
+    match /retiredClassCodes/{code} {
+      allow read, write: if false;
     }
 
     // Writings collection
@@ -99,19 +129,24 @@ service cloud.firestore {
       // Students can read their own writings, super admins can read all
       // Approved teachers can read any writings (cross-doc get() breaks list queries)
       // Client-side code already filters by classCode for teacher's own class
+      // 본인 · 슈퍼관리자 · 그 반 담임만(다른 학교 교사는 못 본다)
       allow read: if isAuthenticated() &&
                      (resource.data.studentId == request.auth.uid ||
                       isSuperAdmin() ||
-                      isApprovedTeacher());
+                      isApprovedTeacherOfClass(resource.data.classCode));
 
       // Only students can create writings (for themselves)
+      // 자기 반 코드로만 쓴다(남의 반 담임 목록에 끼워 넣기 금지)
       allow create: if isStudent() &&
-                       request.resource.data.studentId == request.auth.uid;
+                       request.resource.data.studentId == request.auth.uid &&
+                       request.resource.data.get('classCode', null) == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('classCode', null);
 
       // Student who wrote it can update, OR
       // Approved teacher can update only reviewed/reviewedAt fields
-      allow update: if (isStudent() && resource.data.studentId == request.auth.uid) ||
-                       (isApprovedTeacher() &&
+      allow update: if (isStudent() && resource.data.studentId == request.auth.uid &&
+                        request.resource.data.studentId == resource.data.studentId &&
+                        request.resource.data.get('classCode', null) == resource.data.get('classCode', null)) ||
+                       (isApprovedTeacherOfClass(resource.data.classCode) &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewed', 'reviewedAt']));
 
       // Student can delete their own writing
@@ -120,10 +155,7 @@ service cloud.firestore {
       allow delete: if isAuthenticated() &&
                        (resource.data.studentId == request.auth.uid ||
                         isSuperAdmin() ||
-                        (isTeacher() && (
-                          resource.data.classCode == null ||
-                          get(/databases/$(database)/documents/classes/$(resource.data.classCode)).data.teacherId == request.auth.uid
-                        )));
+                        isApprovedTeacherOfClass(resource.data.get('classCode', null)));
     }
 
     // Student stats collection
@@ -134,7 +166,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                      (request.auth.uid == studentId ||
                       isSuperAdmin() ||
-                      (isTeacher() && isTeacherOfStudent(studentId)));
+                      (isApprovedTeacher() && isTeacherOfStudent(studentId)));
 
       // Only the student themselves or system can write stats
       allow write: if isAuthenticated() &&
@@ -144,19 +176,26 @@ service cloud.firestore {
 
     // Assignments collection
     match /assignments/{assignmentId} {
-      // Anyone authenticated can read assignments
-      allow read: if isAuthenticated();
+      // 과제 문서엔 제출 명단(별명·점수)이 있다 — 그 반 담임·그 반 학생·슈퍼관리자만(2026-11-18 전수 점검)
+      allow read: if isAuthenticated() &&
+                     (isSuperAdmin() ||
+                      isApprovedTeacherOfClass(resource.data.classCode) ||
+                      isStudentOfClass(resource.data.classCode));
 
-      // Only approved teachers can create assignments
-      allow create: if isApprovedTeacher();
+      // 자기 반에, 자기 이름으로만 낸다
+      allow create: if request.resource.data.teacherId == request.auth.uid &&
+                       isApprovedTeacherOfClass(request.resource.data.classCode);
 
       // Teacher/super admin can update anything
       // Students can only update submissions field (for adding their submission info)
       allow update: if isAuthenticated() &&
-                       (resource.data.teacherId == request.auth.uid ||
+                       ((resource.data.teacherId == request.auth.uid && isApprovedTeacher() &&
+                         request.resource.data.teacherId == resource.data.teacherId &&
+                         request.resource.data.classCode == resource.data.classCode) ||
                         isSuperAdmin() ||
-                        (isStudent() &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['submissions'])));
+                        (isStudentOfClass(resource.data.classCode) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['submissions']) &&
+                         request.resource.data.submissions.size() >= resource.data.get('submissions', []).size() - 1));
 
       // Only teacher or super admin can delete
       allow delete: if isAuthenticated() &&
@@ -172,7 +211,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                      (resource.data.studentId == request.auth.uid ||
                       isSuperAdmin() ||
-                      (isTeacher() && isTeacherOfStudent(resource.data.studentId)));
+                      (isApprovedTeacher() && isTeacherOfStudent(resource.data.studentId)));
 
       // Only students can create submissions (for themselves)
       allow create: if isStudent() &&
@@ -180,6 +219,7 @@ service cloud.firestore {
 
       // Only the student who submitted, their class teacher, or super admin can update
       allow update: if isAuthenticated() &&
+                       request.resource.data.studentId == resource.data.studentId &&
                        (resource.data.studentId == request.auth.uid ||
                         isSuperAdmin() ||
                         (isApprovedTeacher() && isTeacherOfStudent(resource.data.studentId)));
@@ -194,23 +234,16 @@ service cloud.firestore {
     // Scheduler settings collection
     match /schedulers/{classCode} {
       // Teachers and super admin can read scheduler settings
-      allow read: if isAuthenticated() && (isTeacher() || isSuperAdmin());
-      // Only the teacher who owns the class or super admin can write
-      allow write: if isAuthenticated() &&
-        (isSuperAdmin() ||
-         (isApprovedTeacher() &&
-          get(/databases/$(database)/documents/classes/$(classCode)).data.teacherId == request.auth.uid));
+      allow read, write: if isSuperAdmin() || isApprovedTeacherOfClass(classCode);
     }
 
     // Auto assignment logs collection
     match /autoAssignmentLogs/{logId} {
       // Teachers and super admin can read auto assignment logs
-      allow read: if isAuthenticated() && (isTeacher() || isSuperAdmin());
-      // Only the teacher who owns the class or super admin can write
-      allow write: if isAuthenticated() &&
-        (isSuperAdmin() ||
-         (isApprovedTeacher() &&
-          get(/databases/$(database)/documents/classes/$(logId)).data.teacherId == request.auth.uid));
+      // 문서 id 는 자동 id — 반은 classCode 칸으로 본다(옛 규칙은 classes/$(logId)를 찾아 늘 거부됐다)
+      allow read: if isSuperAdmin() || isApprovedTeacherOfClass(resource.data.classCode);
+      allow create: if isSuperAdmin() || isApprovedTeacherOfClass(request.resource.data.classCode);
+      allow update, delete: if isSuperAdmin() || isApprovedTeacherOfClass(resource.data.classCode);
     }
 
     // Drafts collection (임시 저장)
@@ -297,7 +330,7 @@ service cloud.firestore {
 
     // API 사용량 추적 (Cloud Functions에서 기록, 관리자만 읽기)
     match /usage/{docId} {
-      allow read: if isAuthenticated() && (isTeacher() || isSuperAdmin());
+      allow read: if isSuperAdmin(); // 사용자별 사용량 — 관리자만(앱은 함수 getUsageStats 로 본다)
       allow write: if isSuperAdmin();
     }
 
@@ -309,10 +342,11 @@ service cloud.firestore {
 
     // 가정통신문 컬렉션
     match /newsletters/{docId} {
-      allow read: if isAuthenticated();
-      allow create: if isApprovedTeacher();
-      allow update, delete: if isAuthenticated() &&
-                               (resource.data.teacherId == request.auth.uid || isSuperAdmin());
+      allow read: if isSuperAdmin() || (isApprovedTeacher() && resource.data.teacherId == request.auth.uid);
+      allow create: if isApprovedTeacher() && request.resource.data.teacherId == request.auth.uid;
+      allow update: if isSuperAdmin() ||
+                       (resource.data.teacherId == request.auth.uid && request.resource.data.teacherId == request.auth.uid);
+      allow delete: if isSuperAdmin() || resource.data.teacherId == request.auth.uid;
     }
   }
 }

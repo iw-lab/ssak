@@ -1,8 +1,45 @@
 {
- "meta": {"class_cap": 4, "class_justified": {}, "note": "싹 화면 코드 관문 — npm run check 가 돌린다(2026-11-18 리디자인)."},
+ "meta": {
+  "class_cap": 4,
+  "class_justified": {},
+  "note": "싹 화면 코드 관문 — npm run check 가 돌린다(2026-11-18 리디자인)."
+ },
  "gates": [
-  {"id": "jsx-undeclared", "stage": "check", "class": "code-wiring", "mode": "block", "match": "선언 없음", "cost_s": "1", "note": "선언·import 없는 JSX 태그(LogOut 누락 재발 방지)"},
-  {"id": "jsx-comment-text", "stage": "check", "class": "ui-text", "mode": "block", "match": "JSX 글자에 주석이 섞임", "cost_s": "1", "note": "JSX 글자 속 // 주석·design-gate 표시가 화면에 찍힘"},
-  {"id": "form-novalidate", "stage": "check", "class": "form-validation", "mode": "block", "match": "form noValidate", "cost_s": "1", "note": "noValidate 로 브라우저 필수칸 검사가 꺼짐"}
+  {
+   "id": "jsx-undeclared",
+   "stage": "check",
+   "class": "code-wiring",
+   "mode": "block",
+   "match": "선언 없음",
+   "cost_s": "1",
+   "note": "선언·import 없는 JSX 태그(LogOut 누락 재발 방지)"
+  },
+  {
+   "id": "jsx-comment-text",
+   "stage": "check",
+   "class": "ui-text",
+   "mode": "block",
+   "match": "JSX 글자에 주석이 섞임",
+   "cost_s": "1",
+   "note": "JSX 글자 속 // 주석·design-gate 표시가 화면에 찍힘"
+  },
+  {
+   "id": "form-novalidate",
+   "stage": "check",
+   "class": "form-validation",
+   "mode": "block",
+   "match": "form noValidate",
+   "cost_s": "1",
+   "note": "noValidate 로 브라우저 필수칸 검사가 꺼짐"
+  },
+  {
+   "id": "rules-privacy",
+   "stage": "deploy",
+   "class": "access-control",
+   "mode": "block",
+   "match": "length \\? 1 : 0",
+   "cost_s": "40",
+   "note": "Firestore 규칙 공격 시험 64종 — 다른 반·다른 학교·낯선 가입자 접근 차단 + 정상 조회 허용(scripts/test-rules-privacy.mjs)"
+  }
  ]
 }

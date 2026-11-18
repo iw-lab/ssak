@@ -19,6 +19,17 @@ const db = getFirestore(DATABASE_ID);
 const auth = getAuth();
 const MAX_STUDENTS_PER_CLASS = 40;
 
+// 학생 첫 비밀번호 — 아이디와 같은 규칙이면 친구 번호만 바꿔 남의 글을 볼 수 있었다(2026-11-18 전수 점검).
+//   아이가 치기 쉽게 헷갈리는 글자(0·o·1·l·i)를 뺀 소문자 3 + 숫자 4, 암호학적 난수.
+const { randomInt } = require("crypto");
+function kidPassword() {
+  const L = "abcdefghjkmnpqrstuvwxyz", D = "23456789";
+  let p = "";
+  for (let i = 0; i < 3; i++) p += L[randomInt(L.length)];
+  for (let i = 0; i < 4; i++) p += D[randomInt(D.length)];
+  return p;
+}
+
 // 🤖 AI 첨삭 = Claude Haiku 5.5(사용자 지정 2026-11-17 «Api 저렴한 하이쿠 같은 버전으로 해도 충분»)
 //   키는 Firebase Secret Manager, 모델은 배포 변수(AI_MODEL)로 바꿀 수 있다.
 const anthropicApiKey = defineSecret("ANTHROPIC_API_KEY");
@@ -27,7 +38,9 @@ const AI_MODEL = defineString("AI_MODEL", { default: "claude-haiku-5-5" });
 // 🔒 국외(미국) AI 로 보내는 학생 글은 반드시 pii.mjs 로 이름·주소·학교·전화를 «ㅇㅇㅇ»로 가린 뒤 보낸다.
 //   callAI 는 { masked: true } 없이는 부르지 못한다 — 가리지 않은 길이 생기지 않게.
 const piiModule = import("./pii.mjs");
+const MAX_AI_TEXT = 12000; // 아이 글은 보통 3천 자 이하 — 아주 긴 입력(숫자 수만 자 등)으로 가림 정규식을 오래 붙잡지 못하게
 async function maskForAI(text, extraWords) {
+  if (String(text || "").length > MAX_AI_TEXT) throw new HttpsError("invalid-argument", `글이 너무 길어요(${MAX_AI_TEXT.toLocaleString()}자까지).`);
   const { maskPII } = await piiModule;
   return maskPII(String(text || ""), { extraWords: Array.isArray(extraWords) ? extraWords : [] });
 }
@@ -51,6 +64,7 @@ async function callAI(prompt, { maxTokens = 2048, systemPrompt, masked } = {}) {
   if (masked !== true) throw new Error("callAI: 학생 글을 가리지 않은 호출(masked:true 필요)");
   // 2차 그물(8way meta·gemini): masked 는 약속일 뿐이라, 보내기 직전 프롬프트 전체를 한 번 더 가린다(이미 가린 곳은 그대로)
   const { maskPII } = await piiModule;
+  if (String(prompt).length > MAX_AI_TEXT * 4) throw new Error("callAI: 프롬프트가 너무 길다");
   const second = maskPII(String(prompt));
   if (second.hits.length) console.warn(`[callAI] 2차 가림 ${second.hits.length}건(${[...new Set(second.hits.map((h) => h.kind))].join(",")}) — 호출부 가림 누락 의심`);
   prompt = second.text;
@@ -815,11 +829,7 @@ exports.batchCreateStudents = onCall(async (request) => {
   for (let i = 1; i <= total; i++) {
     const seq = String(currentStudents + i).padStart(3, "0");
     const email = `${cleanedPrefix}${seq}@${domain}`;
-    // Firebase requires minimum 6 characters for password
-    // Always use format: prefix + seq + "123" to ensure 6+ characters
-    const basePassword = `${cleanedPrefix}${seq}`;
-    const password =
-      basePassword.length >= 6 ? basePassword : `${basePassword}123`;
+    const password = kidPassword();
     const displayName = `학생${seq}`;
 
     try {
@@ -1073,10 +1083,9 @@ exports.resetStudentPassword = onCall(async (request) => {
     const studentData = studentSnap.data();
     const email = studentData.email;
 
-    // Generate new password based on email prefix
-    const emailPrefix = email.split("@")[0];
-    const newPassword =
-      emailPrefix.length >= 6 ? emailPrefix : `${emailPrefix}123`;
+    // 새 비밀번호도 무작위(아이디로 짐작 못 하게)
+    void email;
+    const newPassword = kidPassword();
 
     // Update password in Firebase Auth
     await auth.updateUser(studentId, {
@@ -1503,7 +1512,7 @@ AI판단: 잘쓴글≠AI, 낮은확률(10-20%)기본
 
       if (!jsonMatch) {
         console.error(
-          `[AI 파싱 실패] JSON 없음. 응답: ${responseText.substring(0, 500)}`,
+          `[AI 파싱 실패] JSON 없음. 응답 길이: ${responseText.length}자`,
         );
 
         // 🚀 응답에서 숫자/키워드 추출 시도
@@ -1586,7 +1595,7 @@ AI판단: 잘쓴글≠AI, 낮은확률(10-20%)기본
             console.log("[AI 파싱] JSON 균형 수정 후 파싱 성공");
           } catch (thirdError) {
             console.error(
-              `[AI 파싱 최종 실패] 원본: ${jsonMatch[0].substring(0, 300)}`,
+              `[AI 파싱 최종 실패] 원본 길이: ${jsonMatch[0].length}자`,
             );
 
             // 부분적으로 추출 시도
@@ -2887,6 +2896,7 @@ exports.deleteClassWithStudents = onCall(async (request) => {
     await removeTeacherClassCode(teacherId, classCode);
 
     // 학급 문서 삭제
+    await db.doc(`retiredClassCodes/${classCode}`).set({ retiredAt: new Date().toISOString() }); // 같은 코드 재사용 금지
     await classRef.delete();
 
     // 🚀 학급 삭제 후 슈퍼관리자 classesSummary 동기화
@@ -3025,7 +3035,8 @@ exports.autoDeleteAllClassesOnMarch1 = onSchedule(
           await deleteClassAssignments(classCode);
         await removeTeacherClassCode(teacherId, classCode);
 
-        // 학급 문서 삭제
+        // 학급 문서 삭제 + 코드 은퇴(같은 코드로 새 반을 만들어 남은 글을 보는 길 차단)
+        await db.doc(`retiredClassCodes/${classCode}`).set({ retiredAt: new Date().toISOString() });
         await db.doc(`classes/${classCode}`).delete();
 
         const deletedStudentsInClass = result.deletedStudents;

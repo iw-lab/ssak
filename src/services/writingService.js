@@ -735,35 +735,9 @@ async function getAllClassWritingsBatch(
     });
     // 디버그 로그 감소
 
-    // 선생님 대시보드용: classCode가 없는 기존 글도 조회
-    // studentIds 중 classCode 쿼리에서 글이 없는 학생만 추가 조회
-    if (forTeacher && studentIds.length > 0) {
-      const missingStudentIds = studentIds.filter(
-        (id) => !foundStudentIds.has(id),
-      );
-
-      if (missingStudentIds.length > 0) {
-        // studentId 배치 쿼리 (Firestore 'in'은 최대 30개)
-        const batchSize = 30;
-        for (let i = 0; i < missingStudentIds.length; i += batchSize) {
-          const batchIds = missingStudentIds.slice(i, i + batchSize);
-          const fallbackQ = query(
-            collection(db, "writings"),
-            where("studentId", "in", batchIds),
-            where("isDraft", "==", false),
-            limit(500),
-          );
-          const fallbackSnapshot = await getDocs(fallbackQ);
-          fallbackSnapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            // 이미 classCode 쿼리에서 가져온 글은 제외 (중복 방지)
-            if (!writings.some((w) => w.writingId === data.writingId)) {
-              writings.push(data);
-            }
-          });
-        }
-      }
-    }
+    // (옛 폴백 삭제 2026-11-18) classCode 없는 옛 글을 studentId in 으로 더 찾던 길 — 옛 데이터는 지웠고,
+    //   새 접근 규칙(담임만 자기 반 글)에선 이 조회가 거부돼 catch 가 반 글 전체를 [] 로 지웠다.
+    void studentIds; void forTeacher;
 
     return writings;
   } catch (error) {

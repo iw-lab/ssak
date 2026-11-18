@@ -14,8 +14,8 @@ const coreOf = (w) => {
   return c.length >= 1 ? c : s;
 };
 
-export default function MaskPreviewModal({ text, onConfirm, onCancel }) {
-  const [extra, setExtra] = useState([]);
+export default function MaskPreviewModal({ text, initialExtra = [], onConfirm, onCancel }) {
+  const [extra, setExtra] = useState(() => (Array.isArray(initialExtra) ? initialExtra.slice(0, 40) : []));
   const masked = useMemo(() => maskPII(text || "", { extraWords: extra }).text, [text, extra]);
   const tokens = useMemo(() => masked.split(/(\s+)/), [masked]);
   const add = (tok) => {

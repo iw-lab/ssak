@@ -45,149 +45,6 @@ import { db } from "../config/firebase";
 
 const devLog = import.meta.env.DEV ? console.log.bind(console) : () => {};
 
-// 가정통신문 동의서 다운로드 (HTML → 인쇄용)
-function downloadConsentForm(teacherName, schoolName, className) {
-  const html = `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<title>가정통신문 - AI 글쓰기 학습 도구 개인정보 수집 동의서</title>
-<style>
- @page { size: A4; margin: 15mm 20mm; }
- body { font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 14px; line-height: 1.8; color: #222; max-width: 700px; margin: 0 auto; padding: 20px; }
- h1 { text-align: center; font-size: 22px; margin-bottom: 5px; }
- .subtitle { text-align: center; color: #555; font-size: 13px; margin-bottom: 30px; }
- .greeting { margin-bottom: 20px; }
- h2 { font-size: 15px; background: #f0f7f0; padding: 8px 12px; border-left: 4px solid #10b981; margin-top: 25px; }
- table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
- table th, table td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
- table th { background: #f5f5f5; font-weight: bold; width: 25%; }
- .warning { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 12px; margin: 15px 0; font-size: 13px; }
- .sign-area { margin-top: 40px; border: 2px solid #333; border-radius: 8px; padding: 25px; }
- .sign-area h3 { margin: 0 0 15px 0; font-size: 16px; text-align: center; }
- .sign-row { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; font-size: 14px; }
- .sign-line { border-bottom: 1px solid #333; width: 200px; text-align: center; padding-bottom: 3px; }
- .checkbox-area { margin: 15px 0; }
- .checkbox-area label { display: block; margin: 8px 0; font-size: 14px; }
- .checkbox-area input[type="checkbox"] { width: 18px; height: 18px; margin-right: 8px; vertical-align: middle; }
- .footer { text-align: center; margin-top: 30px; font-size: 13px; color: #666; }
- .school-name { text-align: center; font-size: 16px; font-weight: bold; margin-top: 30px; }
- .cut-line { border-top: 2px dashed #999; margin: 40px 0 20px 0; position: relative; }
- .cut-line::after { content: ' 절취선'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: white; padding: 0 10px; font-size: 12px; color: #999; }
- @media print { body { padding: 0; } .no-print { display: none; } }
-</style>
-</head>
-<body>
-
-<div class="no-print" style="text-align:center; margin-bottom:20px; padding:15px; background:#e8f5e9; border-radius:8px;">
- <strong>이 문서를 수정하려면:</strong> 브라우저에서 <kbd>Ctrl+A</kbd> (전체선택) → 워드/한글에 붙여넣기 하세요.<br>
- 인쇄하려면: <kbd>Ctrl+P</kbd> 를 누르세요. (이 안내 문구는 인쇄되지 않습니다)
-</div>
-
-<h1> 가정통신문</h1>
-<p class="subtitle">AI 글쓰기 학습 도구 사용 안내 및 개인정보 수집·이용 동의서</p>
-
-<div class="greeting">
-<p>학부모님 안녕하십니까.</p>
-<p>본교에서는 학생들의 글쓰기 능력 향상을 위해 <strong>AI 글쓰기 학습 도구(ISW 글쓰기 도우미)</strong>를 수업에 활용하고자 합니다. 아래 내용을 확인하시고, 동의 여부를 표시하여 회신해 주시기 바랍니다.</p>
-</div>
-
-<h2>1. 서비스 개요</h2>
-<table>
- <tr><th>서비스명</th><td>ISW 글쓰기 도우미 (isw-writing.web.app)</td></tr>
- <tr><th>목적</th><td>학생 글쓰기 학습 지원 및 AI 기반 자동 평가·피드백 제공</td></tr>
- <tr><th>사용 방법</th><td>학교 수업 시간에 교사 지도 하에 웹 브라우저로 접속하여 사용</td></tr>
- <tr><th>사용 기간</th><td>해당 학년도 (학년도 종료 후 1년 이내 데이터 삭제)</td></tr>
-</table>
-
-<h2>2. 수집하는 개인정보</h2>
-<table>
- <tr><th>구분</th><th>수집 항목</th><th>수집 목적</th></tr>
- <tr><td><strong>계정 정보</strong></td><td>닉네임(별명), 이메일 형식 아이디</td><td>서비스 로그인 및 학생 식별</td></tr>
- <tr><td><strong>학습 데이터</strong></td><td>작성한 글, AI 평가 결과, 수정 이력</td><td>글쓰기 평가 및 성장 추적</td></tr>
-</table>
-<p style="font-size:13px; color:#666;">※ 학생의 실명, 주민등록번호, 전화번호 등은 수집하지 않습니다.</p>
-
-<h2>3. AI 평가를 위한 제3자 제공</h2>
-<div class="warning">
- <strong> 중요 안내:</strong> 글쓰기 평가를 위해 학생이 작성한 <strong>글 내용</strong>이 이름·지역·주소·학교·전화번호를 «ㅇㅇㅇ»로 가린 뒤 AI 서비스(Anthropic Claude API)로 전송됩니다.
-</div>
-<table>
- <tr><th>제공받는 자</th><td>Anthropic, PBC (미국, Claude API)</td></tr>
- <tr><th>전송 항목</th><td>작성한 글 내용, 학년 정보, 글쓰기 주제 <strong>(이름·지역·주소·학교·전화번호는 «ㅇㅇㅇ»로 가림)</strong></td></tr>
- <tr><th>전송 목적</th><td>AI 기반 글쓰기 평가 및 피드백 생성</td></tr>
- <tr><th>보유 기간</th><td>받은 날로부터 30일 이내 자동 삭제 (Anthropic 정책, 이용정책 위반 의심 등 예외)</td></tr>
- <tr><th>AI 학습 사용</th><td><strong>사용하지 않음</strong> (Anthropic 상업 약관에 따라 API 데이터는 기본적으로 모델 학습에 미사용)</td></tr>
-</table>
-
-<h2>4. 개인정보 보호 조치</h2>
-<ul style="font-size:13px;">
- <li>모든 데이터는 <strong>암호화</strong>되어 저장 및 전송됩니다 (HTTPS, Firebase 보안)</li>
- <li>학생 정보는 <strong>해당 학급 담당 교사만</strong> 열람 가능합니다</li>
- <li>다른 학생의 글이나 점수를 볼 수 없도록 <strong>접근이 제한</strong>됩니다</li>
- <li>학년도 종료 후 1년 이내 <strong>자동 삭제</strong>됩니다</li>
- <li>학부모 요청 시 <strong>즉시 삭제</strong> 가능합니다</li>
-</ul>
-
-<h2>5. 정보주체의 권리</h2>
-<ul style="font-size:13px;">
- <li>개인정보 열람, 정정, 삭제, 처리 정지를 요청할 수 있습니다</li>
- <li>동의를 철회하면 해당 학생의 계정 및 데이터가 삭제됩니다</li>
- <li>동의하지 않을 권리가 있으며, 미동의 시 해당 서비스 이용이 제한됩니다</li>
-</ul>
-
-<div class="cut-line"></div>
-
-<div class="sign-area">
- <h3>AI 글쓰기 학습 도구 개인정보 수집·이용 동의서</h3>
-
- <p style="font-size:13px; text-align:center; color:#555; margin-bottom:15px;">
- 위 안내 내용을 충분히 읽고 이해하였으며, 아래와 같이 동의합니다.
- </p>
-
- <div class="checkbox-area">
- <label><input type="checkbox"> <strong>[필수]</strong> 개인정보(닉네임, 글쓰기 내용) 수집·이용에 동의합니다.</label>
- <label><input type="checkbox"> <strong>[필수]</strong> AI 평가를 위해 개인정보를 가린 글 내용이 Anthropic Claude API로 전송되는 것에 동의합니다.</label>
- <label><input type="checkbox"> [선택] 서비스 개선 및 학습 관련 안내를 받는 것에 동의합니다.</label>
- </div>
-
- <div style="margin-top:25px;">
- <div class="sign-row">
- <span>학생 이름 (학년/반/번호):</span>
- <span class="sign-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;학년&nbsp;&nbsp;&nbsp;반&nbsp;&nbsp;&nbsp;번&nbsp;&nbsp;&nbsp;이름:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
- </div>
- <div class="sign-row">
- <span>보호자 성명:</span>
- <span class="sign-line"></span>
- </div>
- <div class="sign-row">
- <span>보호자 서명 (인):</span>
- <span class="sign-line"></span>
- </div>
- <div class="sign-row">
- <span>날짜:</span>
- <span class="sign-line">${new Date().getFullYear()}년&nbsp;&nbsp;&nbsp;&nbsp;월&nbsp;&nbsp;&nbsp;&nbsp;일</span>
-    </div>
-  </div>
-</div>
-
-<p class="school-name" style="margin-top:30px;">${schoolName || "○○초등학교"}장</p>
-<p class="footer">${className || "○학년 ○반"} 담임 ${teacherName || "○○○"}</p>
-
-</body>
-</html>`;
-
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "가정통신문_AI글쓰기_개인정보동의서.html";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 // 학급 글 백업 HTML 생성 및 다운로드
 function generateBackupHTML(className, writings, mode, teacherName) {
   const today = new Date().toLocaleDateString("ko-KR");
@@ -1881,24 +1738,17 @@ export default function TeacherDashboard({ user, userData }) {
                     개인정보 수집 동의서 (가정통신문)
                   </h4>
                   <p className="text-emerald-700 text-sm mb-3">
-                    학생 계정 생성 전, 학부모 동의서를 배부하고 회수해 주세요.
-                    다운로드 후 학교명·학년·이름을 수정하여 사용하세요.
+                    학생 계정을 만들기 전에 보호자 동의서(수집·이용 + 국외 이전 «따로» 동의)를 나눠 주고 회수해 주세요.
+                    동의하지 않은 학생은 계정을 만들지 마세요. AI 학습지원 소프트웨어는 학교운영위원회 심의도 필요합니다(초·중등교육법 제29조의2).
                   </p>
-                  <button
-                    onClick={() =>
-                      downloadConsentForm(
-                        userData?.name || "",
-                        "",
-                        selectedClass?.className || "",
-                      )
-                    }
+                  <a
+                    href="/consent-letter"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 bg-emerald-600 text-white px-5 py-2 rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm"
                   >
-                    <span><Emo n="Download" /></span> 동의서 다운로드 (HTML)
-                  </button>
-                  <span className="ml-3 text-xs text-emerald-600">
-                    Ctrl+P로 인쇄 / 워드에 붙여넣기로 수정 가능
-                  </span>
+                    <span><Emo n="Printer" /></span> 동의서 열기·인쇄
+                  </a>
                 </div>
               </div>
             </div>
@@ -1949,7 +1799,7 @@ export default function TeacherDashboard({ user, userData }) {
                     → student001, student002, ...)
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    생성 예시: 아이디 student001@도메인 / 비밀번호 student001
+                    생성 예시: 아이디 student001@도메인 / 비밀번호는 학생마다 무작위(예: kpm4827) — 아래 표를 인쇄해 나눠 주세요
                   </p>
                 </div>
 
@@ -3438,8 +3288,8 @@ export default function TeacherDashboard({ user, userData }) {
                   </h3>
                   <div className="bg-emerald-50 p-4 rounded border border-emerald-200">
                     <p className="text-xs text-emerald-700 mb-3">
-                      <Emo n="AlertTriangle" /> 이 정보는 학생들에게 전달해야 합니다. 비밀번호는 로그인
-                      후 변경할 수 있습니다.
+                      <Emo n="AlertTriangle" /> 이 표는 지금 한 번만 보여요(저장하지 않아요). 인쇄하거나 옮겨 적어
+                      학생에게 나눠 주세요. 잊으면 «비밀번호 초기화»로 새로 만들 수 있어요.
                     </p>
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-sm">

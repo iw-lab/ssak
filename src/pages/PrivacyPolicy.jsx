@@ -34,7 +34,7 @@ export default function PrivacyPolicy() {
             개인정보처리방침
           </h1>
           <p className="text-gray-500 mb-8">
-            시행일: 2026년 1월 1일 | 최종 수정: 2026년 2월
+            시행일: 2026년 1월 1일 | 최종 수정: 2026년 11월 18일(국외 이전·보유 기간·접근 규칙 갱신)
           </p>
 
           <div className="prose prose-emerald max-w-none">
@@ -81,13 +81,13 @@ export default function PrivacyPolicy() {
                         학생
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        이름, 학년, 학급, 학번
+                        학생 번호 이름(예: 학생001)·별명, 학년, 학급, 로그인 아이디
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         회원 식별, 학습 관리
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        학년도 종료 후 1년
+                        학년도 끝(매년 3월 1일 자동 삭제)
                       </td>
                     </tr>
                     <tr>
@@ -115,7 +115,7 @@ export default function PrivacyPolicy() {
                         글쓰기 평가, 성장 추적
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        학년도 종료 후 1년
+                        학년도 끝(매년 3월 1일 자동 삭제)
                       </td>
                     </tr>
                     <tr>
@@ -148,38 +148,36 @@ export default function PrivacyPolicy() {
                 </p>
               </div>
               <p className="text-gray-700 leading-relaxed mb-4">
-                서비스는 글쓰기 평가를 위해 작성된 글을 AI 서비스(Anthropic Claude)에
-                전송하며(보내기 전에 이름·지역·주소·학교·전화번호를 «ㅇㅇㅇ»로 가림), 이는 개인정보보호법 제28조의8에 따른 개인정보의 국외
-                이전에 해당합니다.
+                서비스는 아래 두 곳으로 개인정보를 국외 이전합니다(개인정보 보호법 제28조의8). 학생 글은 보내기 전에
+                이름·지역·주소·학교·전화번호 등을 «ㅇㅇㅇ»로 가리고, 학생이 제출 전 미리보기에서 더 가릴 수 있습니다.
               </p>
+              <h3 className="font-bold text-gray-900 mt-4 mb-2">① AI 첨삭 — Anthropic</h3>
               <ul className="list-disc ml-6 text-gray-700 space-y-2">
-                <li>
-                  <strong>전송 항목:</strong> 작성된 글 내용, 학년 정보, 주제
-                  (이름·지역·주소·학교·전화번호·이메일은 자동으로 «ㅇㅇㅇ»로 가린 뒤 전송, 학생이 제출 전 미리보기에서 추가로 가릴 수 있음)
-                </li>
-                <li>
-                  <strong>전송 목적:</strong> AI 기반 글쓰기 평가 및 피드백 생성
-                </li>
-                <li>
-                  <strong>이전되는 국가:</strong> 미국
-                </li>
-                <li>
-                  <strong>제공받는 자:</strong> Anthropic, PBC (Claude API)
-                </li>
-                <li>
-                  <strong>이전 방법:</strong> HTTPS 암호화 통신을 통한 API 전송
-                </li>
-                <li>
-                  <strong>보유 기간:</strong> 받은 날로부터 30일 이내 자동 삭제
-                  (Anthropic 정책 — 이용정책 위반 의심·법령상 보존 등 예외)
-                </li>
-                <li>
-                  <strong>AI 학습 미사용:</strong> Anthropic 상업 약관에 따라 API로
-                  전송된 데이터는 기본적으로 AI 모델 학습에 사용되지 않습니다.
-                </li>
-                <li>
-                  <strong>원본 저장 위치:</strong> 학생 글 원본은 대한민국(서울) 리전 데이터베이스에 저장합니다.
-                </li>
+                <li><strong>이전 항목:</strong> 가린 뒤의 글 내용, 글 주제, 학년(학생 이름·아이디·이메일은 보내지 않음)</li>
+                <li><strong>이전 국가·시기·방법:</strong> 미국 / 학생이 글을 제출하거나 글쓰기 도움을 누를 때마다 / HTTPS 암호화 통신(API)</li>
+                <li><strong>이전받는 자·연락처:</strong> Anthropic, PBC (548 Market St, PMB 90375, San Francisco, CA 94104, USA) · privacy@anthropic.com
+                  · 국내대리인 앤트로픽코리아 유한회사(서울 강남구 테헤란로 152, 41층) anthropic_privacy@kimchang.com</li>
+                <li><strong>이용 목적·보유 기간:</strong> 글쓰기 첨삭 생성 / 받은 날부터 30일 안에 삭제(이용정책 위반 의심 글은 최대 2년, 법령상 보존 예외).
+                  API로 보낸 글은 기본적으로 AI 학습에 쓰지 않습니다.</li>
+              </ul>
+              <h3 className="font-bold text-gray-900 mt-4 mb-2">② 로그인·서비스 운영 — Google (Firebase)</h3>
+              <ul className="list-disc ml-6 text-gray-700 space-y-2">
+                <li><strong>이전 항목:</strong> 로그인 아이디(이메일 형식)·암호화된 비밀번호(Firebase Authentication), 접속 IP(Firebase Hosting, 부정 이용 탐지), 서버 기록(사용자 번호·처리 결과)</li>
+                <li><strong>이전 국가·시기·방법:</strong> 미국 등 Google 데이터센터 / 가입·로그인·접속할 때 / HTTPS 암호화 통신</li>
+                <li><strong>이전받는 자·연락처:</strong> Google LLC (1600 Amphitheatre Parkway, Mountain View, CA 94043, USA) · firebase.google.com/support/privacy</li>
+                <li><strong>이용 목적·보유 기간:</strong> 로그인, 웹사이트 제공, 오류 확인 / 계정 삭제 시까지(접속 IP는 수개월)</li>
+                <li><strong>학생 글 원본 저장 위치:</strong> 대한민국(서울) 리전 — 글·점수·첨삭 결과는 국외로 옮겨 저장하지 않습니다.</li>
+              </ul>
+              <h3 className="font-bold text-gray-900 mt-4 mb-2">③ 거부 방법·절차·거부할 때</h3>
+              <ul className="list-disc ml-6 text-gray-700 space-y-2">
+                <li>가정통신문(개인정보 수집·이용·국외 이전 동의서)에서 «동의하지 않음»을 고르거나, 언제든 담임 선생님께 말씀하시면 됩니다.</li>
+                <li>동의하지 않으면 그 학생의 계정을 만들지 않으며, 이미 만든 계정은 글과 함께 바로 삭제합니다.</li>
+                <li>동의하지 않아도 불이익은 없습니다. 수업 활동은 종이 글쓰기 등 다른 방법으로 함께합니다.</li>
+              </ul>
+              <h3 className="font-bold text-gray-900 mt-4 mb-2">④ 처리 위탁</h3>
+              <ul className="list-disc ml-6 text-gray-700 space-y-2">
+                <li>Google LLC(Google Cloud·Firebase): 데이터 저장(서울 리전), 서버 기능 실행(서울 리전), 로그인, 웹사이트 제공</li>
+                <li>Anthropic, PBC: AI 글쓰기 첨삭 생성</li>
               </ul>
             </section>
 
@@ -190,8 +188,8 @@ export default function PrivacyPolicy() {
               </h2>
               <ul className="list-disc ml-6 text-gray-700 space-y-2">
                 <li>
-                  <strong>기술적 조치:</strong> 데이터베이스 암호화 (Firebase
-                  Security Rules), HTTPS 통신 암호화
+                  <strong>기술적 조치:</strong> 저장 데이터 암호화(Google Cloud 기본 암호화),
+                  HTTPS 통신 암호화, 접근 권한 규칙(담임은 자기 반만 — 다른 반·다른 학교 접근 차단을 공격 시험으로 확인)
                 </li>
                 <li>
                   <strong>관리적 조치:</strong> 개인정보 취급자 최소화, 접근
@@ -202,7 +200,7 @@ export default function PrivacyPolicy() {
                   관리자만 열람 가능
                 </li>
                 <li>
-                  <strong>비밀번호:</strong> 일방향 암호화(Hash) 저장
+                  <strong>비밀번호:</strong> 일방향 암호화(Hash) 저장, 학생 첫 비밀번호는 학생마다 무작위
                 </li>
               </ul>
             </section>
@@ -274,7 +272,7 @@ export default function PrivacyPolicy() {
                 <li>보유 기간 경과 시 지체 없이 파기</li>
                 <li>전자적 파일: 복구 불가능한 방법으로 영구 삭제</li>
                 <li>종이 문서: 분쇄 또는 소각</li>
-                <li>학년도 종료 후 1년 경과 시 학생 데이터 자동 삭제</li>
+                <li>매년 3월 1일(학년도가 끝나면) 모든 학급·학생 계정·글·과제를 자동 삭제</li>
               </ul>
             </section>
 

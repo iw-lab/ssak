@@ -32,13 +32,14 @@ export async function analyzeWriting(
   }
 }
 
-export async function getWritingHelp(text, topic, helpType = "hint") {
+export async function getWritingHelp(text, topic, helpType = "hint", maskWords = []) {
   try {
     const getWritingHelpFn = httpsCallable(functions, "getWritingHelp");
     const result = await getWritingHelpFn({
       text,
       topic,
       helpType,
+      maskWords,
     });
     return result.data;
   } catch (error) {
@@ -67,6 +68,7 @@ export async function getQuickAdvice(
   topic,
   gradeLevel,
   adviceType = "encourage",
+  maskWords = [],
 ) {
   try {
     const getQuickAdviceFn = httpsCallable(functions, "getQuickAdvice");
@@ -75,6 +77,7 @@ export async function getQuickAdvice(
       topic,
       gradeLevel,
       adviceType,
+      maskWords,
     });
     return result.data;
   } catch (error) {

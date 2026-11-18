@@ -85,6 +85,14 @@ const AvatarShop = lazy(() => import("../components/shop/AvatarShop"));
 export default function StudentDashboard({ user, userData }) {
   const [classInfo, setClassInfo] = useState(null);
   const [maskPreview, setMaskPreview] = useState(null); // { text, resolve } — 제출 전 가림 미리보기(국외 AI 로 가기 전)
+  const [maskMemo, setMaskMemo] = useState([]); // 이 글에서 학생이 더 가린 낱말 — 도움·조언·제출 때 다시 누르지 않게
+  // 국외 AI 로 글을 보내는 모든 길(제출·도움·조언)은 이 미리보기를 거친다(2026-11-18 전수 점검: 도움·조언은 미리보기 없이 갔다)
+  const askMask = async (text) => {
+    const words = await new Promise((resolve) => setMaskPreview({ text, resolve }));
+    setMaskPreview(null);
+    if (words !== null) setMaskMemo(words);
+    return words;
+  };
   const [activeTab, setActiveTab] = useState("write");
   const [writings, setWritings] = useState([]);
   const [stats, setStats] = useState(null);
@@ -1183,12 +1191,18 @@ export default function StudentDashboard({ user, userData }) {
       alert("먼저 글을 작성해주세요.");
       return;
     }
+    let maskWords = [];
+    if (currentWriting.content) {
+      maskWords = await askMask(currentWriting.content);
+      if (maskWords === null) return;
+    }
     setLoadingHelp(true);
     try {
       const help = await getWritingHelp(
         currentWriting.content,
         currentWriting.topic,
         helpType,
+        maskWords,
       );
       setAiHelp({ type: helpType, content: help });
 
@@ -1348,6 +1362,8 @@ export default function StudentDashboard({ user, userData }) {
       return;
     }
 
+    const maskWords = await askMask(currentWriting.content);
+    if (maskWords === null) return;
     setLoadingQuickAdvice(true);
     try {
       const result = await getQuickAdvice(
@@ -1355,6 +1371,7 @@ export default function StudentDashboard({ user, userData }) {
         currentWriting.topic,
         userData.gradeLevel,
         adviceType,
+        maskWords,
       );
       setQuickAdvice(result);
       setLastAdviceTime(now);
@@ -1444,8 +1461,7 @@ export default function StudentDashboard({ user, userData }) {
     }
 
     // 제출 전 미리보기 — AI(국외)로 갈 글을 이름·주소 가린 모습으로 보여 주고, 더 가릴 낱말을 고르게 한다
-    const maskWords = await new Promise((resolve) => setMaskPreview({ text: currentWriting.content, resolve }));
-    setMaskPreview(null);
+    const maskWords = await askMask(currentWriting.content);
     if (maskWords === null) return;
 
     setIsSubmitting(true);
@@ -1892,7 +1908,7 @@ export default function StudentDashboard({ user, userData }) {
   return (
     <div className="min-h-screen bg-background via-white to-cyan-50">
       {maskPreview && (
-        <MaskPreviewModal text={maskPreview.text} onConfirm={(w) => maskPreview.resolve(w)} onCancel={() => maskPreview.resolve(null)} />
+        <MaskPreviewModal text={maskPreview.text} initialExtra={maskMemo} onConfirm={(w) => maskPreview.resolve(w)} onCancel={() => maskPreview.resolve(null)} />
       )}
       {showConfetti && (
         <Suspense fallback={null}>

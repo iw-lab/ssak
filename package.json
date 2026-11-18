@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy:all": "npm run build && firebase.cmd deploy --only hosting,firestore",
-    "check": "node scripts/check-jsx-undef.cjs src/pages/*.jsx src/components/*.jsx src/components/shop/*.jsx src/App.jsx && node functions/test-pii.mjs && G=~/.claude/skills/design-master/scripts/design-gate.mjs && if [ -f $G ]; then node $G src/index.css; else echo design-gate 없음·건너뜀; fi"
+    "check": "node scripts/check-jsx-undef.cjs src/pages/*.jsx src/components/*.jsx src/components/shop/*.jsx src/App.jsx && node functions/test-pii.mjs && G=~/.claude/skills/design-master/scripts/design-gate.mjs && if [ -f $G ]; then node $G src/index.css; else echo design-gate 없음·건너뜀; fi",
+    "test:rules": "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21} firebase emulators:exec --only auth,firestore --project isw-writing 'node scripts/test-rules-privacy.mjs'",
+    "predeploy:check": "npm run check && npm run test:rules"
   },
   "dependencies": {
     "autoprefixer": "^10.4.16",

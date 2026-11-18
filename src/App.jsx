@@ -22,6 +22,7 @@ const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
 const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const Terms = lazy(() => import("./pages/Terms"));
+const ConsentLetter = lazy(() => import("./pages/ConsentLetter"));
 const Landing = lazy(() => import("./pages/Landing"));
 
 // 로딩 컴포넌트 (Suspense fallback)
@@ -191,6 +192,7 @@ function App() {
             <Route path="/role-selection" element={<RoleSelection />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/consent-letter" element={<ConsentLetter />} />
             <Route path="/landing" element={<Landing />} />
             <Route
               path="/super-admin"

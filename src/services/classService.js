@@ -90,18 +90,19 @@ export async function createClass(teacherId, className, gradeLevel, description 
       throw new Error('선생님은 1개의 학급만 생성할 수 있습니다. 기존 학급을 삭제한 후 다시 시도해주세요.');
     }
 
-    let classCode = generateClassCode();
-
-    // 중복 코드 확인 및 재생성
-    let isUnique = false;
-    while (!isUnique) {
-      const classDoc = await getDoc(doc(db, 'classes', classCode));
-      if (!classDoc.exists()) {
-        isUnique = true;
-      } else {
-        classCode = generateClassCode();
+    // 중복 코드 확인 및 재생성 — 남의 반 코드는 읽기가 거부된다(접근 규칙) → «이미 있음»으로 보고 다시 뽑는다
+    const denied = (e) => /permission|insufficient/i.test(String(e?.code || e?.message));
+    let classCode = null;
+    for (let tries = 0; tries < 8 && !classCode; tries++) {
+      const c = generateClassCode();
+      try {
+        const classDoc = await getDoc(doc(db, 'classes', c));
+        if (!classDoc.exists()) classCode = c;
+      } catch (e) {
+        if (!denied(e)) throw e;
       }
     }
+    if (!classCode) throw new Error('학급 코드를 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.');
 
     const classData = {
       classCode,
@@ -114,7 +115,14 @@ export async function createClass(teacherId, className, gradeLevel, description 
       maxStudents: MAX_STUDENTS_PER_CLASS
     };
 
-    await setDoc(doc(db, 'classes', classCode), classData);
+    try {
+      await setDoc(doc(db, 'classes', classCode), classData);
+    } catch (e) {
+      if (!denied(e)) throw e;
+      // 예전에 지운(은퇴한) 코드였다 — 한 번 더 새 코드로
+      classData.classCode = classCode = generateClassCode();
+      await setDoc(doc(db, 'classes', classCode), classData);
+    }
     return classData;
   } catch (error) {
     console.error('학급 생성 에러:', error);
