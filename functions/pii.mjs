@@ -349,7 +349,7 @@ export function maskPII(text, opts = {}) {
     sub(re, "name", () => MASK);
   }
   // 학생이 미리보기에서 고른 낱말은 경계 없이 전부(학생이 고른 것이 우선) — 길이·개수 상한(정규식 폭주 방지)
-  const extra = [...new Set((Array.isArray(opts.extraWords) ? opts.extraWords : []).slice(0, 40)
+  const extra = [...new Set((Array.isArray(opts.extraWords) ? opts.extraWords : []).slice(0, 150)
     .map((w) => String(w == null ? "" : w).trim().slice(0, 20)).filter((x) => x.length >= 1 && x !== MASK && !x.includes(MASK)))]
     .sort((a, b) => b.length - a.length);
   if (extra.length) sub(new RegExp(extra.map(esc).join("|"), "g"), "extra", () => MASK);

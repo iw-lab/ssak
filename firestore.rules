@@ -368,6 +368,31 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 3-2 친구 글 칭찬·질문 — 가린 사본·남긴 말 모두 함수(peerShare·peerSend·peerDecide…)만 다룬다(글쓴이·보낸이 칸 보호)
+    match /peerShares/{docId} {
+      allow read, write: if false;
+    }
+    match /peerNotes/{docId} {
+      allow read, write: if false;
+    }
+
+    // 3-4 실시간 교실 현황 — 학생은 «주제·글자 수·시각»만 자기 칸에 쓴다(글 내용 없음). 읽기는 그 반 담임만
+    match /presence/{uid} {
+      allow read: if isAuthenticated() && (isApprovedTeacherOfClass(resource.data.classCode) || isSuperAdmin());
+      allow create, update: if isStudent() && uid == request.auth.uid &&
+                               request.resource.data.keys().hasOnly(['classCode', 'topic', 'len', 'at', 'state']) &&
+                               request.resource.data.classCode is string &&
+                               request.resource.data.classCode == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('classCode', null) &&
+                               // 같은 주제·상태로는 1분에 한 번만(브라우저 쓰로틀을 건너뛴 연타 막기)
+                               (resource == null || request.resource.data.topic != resource.data.topic || request.resource.data.state != resource.data.state ||
+                                request.time > resource.data.at + duration.value(60, 's')) &&
+                               request.resource.data.topic is string && request.resource.data.topic.size() <= 200 &&
+                               request.resource.data.len is int && request.resource.data.len >= 0 && request.resource.data.len <= 20000 &&
+                               request.resource.data.at == request.time &&
+                               request.resource.data.state in ['writing', 'submitted', 'left'];
+      allow delete: if false;
+    }
+
     // API 사용량 추적 (Cloud Functions에서 기록, 관리자만 읽기)
     match /usage/{docId} {
       allow read: if isSuperAdmin(); // 사용자별 사용량 — 관리자만(앱은 함수 getUsageStats 로 본다)

@@ -109,10 +109,10 @@ export default function PrivacyPolicy() {
                         학습 데이터
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        작성 글, 평가 결과, 수정 이력
+                        작성 글, 평가 결과, 수정 이력, 쓰는 과정 숫자(쓴 시간·입력 횟수), 쓰는 중 현황(주제·글자 수·시각), 친구에게 남긴 칭찬·질문
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        글쓰기 평가, 성장 추적
+                        글쓰기 평가, 성장 추적, 담임의 수업 지도(현황·과정은 담임만 봄), 반 안 친구 글 읽기(담임이 고른 글만, 이름을 가린 사본 · 남긴 말은 담임 확인 뒤 이름 없이 전달)
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         학년도 끝(매년 3월 1일 자동 삭제)

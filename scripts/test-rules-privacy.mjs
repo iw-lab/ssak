@@ -172,6 +172,27 @@ await client(async (auth, db) => {
   await legit("슈퍼관리자: 교사 승인", () => updateDoc(doc(db, `users/${tB}`), { approved: true }));
 });
 
+// 3-4 실시간 교실 현황(presence) — 내용 없이 주제·글자 수만, 읽기는 그 반 담임만
+await adb.doc(`presence/${sB}`).set({ classCode: "B1", topic: "겨울", len: 50, at: new Date(), state: "writing" });
+await client(async (auth, db) => {
+  await signInWithEmailAndPassword(auth, "sa001@school-a.kr", "secret123");
+  const { serverTimestamp } = await import("firebase/firestore");
+  await legit("학생: 내 현황(주제·글자 수) 쓰기", () => setDoc(doc(db, `presence/${c_uid(auth)}`), { classCode: "A1", topic: "일기", len: 120, at: serverTimestamp(), state: "writing" }));
+  await attack("학생: 같은 주제 현황 1분 안에 연타", () => setDoc(doc(db, `presence/${c_uid(auth)}`), { classCode: "A1", topic: "일기", len: 121, at: serverTimestamp(), state: "writing" }));
+  await legit("학생: 제출하면 바로 상태 바꾸기", () => setDoc(doc(db, `presence/${c_uid(auth)}`), { classCode: "A1", topic: "일기", len: 121, at: serverTimestamp(), state: "submitted" }));
+  await attack("학생: 현황에 글 내용 끼워 넣기", () => setDoc(doc(db, `presence/${c_uid(auth)}`), { classCode: "A1", topic: "일기", len: 1, at: serverTimestamp(), state: "writing", content: "비밀" }));
+  await attack("학생: 친구 현황 덮어쓰기", () => setDoc(doc(db, `presence/${sA2}`), { classCode: "A1", topic: "일기", len: 0, at: serverTimestamp(), state: "left" }));
+  await attack("학생: 남의 반 코드로 현황 쓰기", () => setDoc(doc(db, `presence/${c_uid(auth)}`), { classCode: "B1", topic: "x", len: 0, at: serverTimestamp(), state: "writing" }));
+  await attack("학생: 시각 위조(과거로)", () => setDoc(doc(db, `presence/${c_uid(auth)}`), { classCode: "A1", topic: "x", len: 0, at: new Date(0), state: "writing" }));
+  await attack("학생: 반 친구 현황 엿보기", () => getDocs(query(collection(db, "presence"), where("classCode", "==", "A1"))));
+});
+await client(async (auth, db) => {
+  await signInWithEmailAndPassword(auth, "ta@school-a.kr", "secret123");
+  await legit("담임: 우리 반 현황 보기", () => getDocs(query(collection(db, "presence"), where("classCode", "==", "A1"))));
+  await attack("다른 반 교사: 남의 반 현황", () => getDocs(query(collection(db, "presence"), where("classCode", "==", "B1"))));
+  await attack("교사: 현황 쓰기", () => setDoc(doc(db, `presence/${sA}`), { classCode: "A1", topic: "x", len: 0, at: new Date(), state: "left" }));
+});
+
 const bad = results.filter(([, ok]) => !ok);
 console.log(bad.length ? `FAIL ${bad.length}/${results.length}` : `PASS ${results.length}/${results.length}`);
 process.exit(bad.length ? 1 : 0);

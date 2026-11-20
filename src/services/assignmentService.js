@@ -87,9 +87,12 @@ export function invalidateSubmissionsCache(key) {
   }
 }
 
-export async function createAssignment(teacherId, classCode, title, description, dueDate, minScore = 70, maxAiProbability = 50) {
+// options = { genre, focus } — 글 종류(2-A)·과제 중점(2-J, 최대 3항목). 학생 첨삭이 이 기준으로 본다.
+export async function createAssignment(teacherId, classCode, title, description, dueDate, minScore = 70, maxAiProbability = 50, options = {}) {
   try {
     const createdAt = new Date().toISOString();
+    const genre = typeof options.genre === 'string' && options.genre ? options.genre : null;
+    const focus = Array.isArray(options.focus) ? options.focus.slice(0, 3) : [];
     const assignment = {
       teacherId,
       classCode,
@@ -98,6 +101,8 @@ export async function createAssignment(teacherId, classCode, title, description,
       dueDate,
       minScore,
       maxAiProbability,
+      genre,
+      focus,
       createdAt
     };
 
@@ -108,6 +113,8 @@ export async function createAssignment(teacherId, classCode, title, description,
       title,
       description,
       minScore,
+      genre,
+      focus,
       createdAt
     };
 

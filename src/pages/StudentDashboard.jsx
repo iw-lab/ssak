@@ -4,6 +4,9 @@ import MaskPreviewModal from "../components/MaskPreviewModal";
 import FeedbackView, { RewriteGuide } from "../components/FeedbackView";
 import { GENRES, GOALS, guessGenre } from "../config/writingOptions";
 import ThinkFirst from "../components/ThinkFirst";
+import SentencePractice from "../components/SentencePractice";
+import { PeerBoard, PeerInbox } from "../components/PeerNotes";
+import { beat as presenceBeat } from "../services/presenceService";
 import {
   useState,
   useEffect,
@@ -87,6 +90,7 @@ const AvatarShop = lazy(() => import("../components/shop/AvatarShop"));
 
 export default function StudentDashboard({ user, userData }) {
   const [classInfo, setClassInfo] = useState(null);
+  const [peerOpen, setPeerOpen] = useState(false); // 3-2 친구 글(열 때만 불러온다)
   const [maskPreview, setMaskPreview] = useState(null); // { text, resolve } — 제출 전 가림 미리보기(국외 AI 로 가기 전)
   const [maskMemo, setMaskMemo] = useState([]); // 이 글에서 학생이 더 가린 낱말 — 도움·조언·제출 때 다시 누르지 않게
   // 국외 AI 로 글을 보내는 모든 길(제출·도움·조언)은 이 미리보기를 거친다(2026-11-18 전수 점검: 도움·조언은 미리보기 없이 갔다)
@@ -1360,6 +1364,7 @@ export default function StudentDashboard({ user, userData }) {
         : e.target.value;
     const wordCount = content.replace(/\s/g, "").length;
     noteInput(content.length - (currentWriting.content || "").length);
+    presenceBeat(user.uid, userData.classCode, currentWriting.topic, wordCount); // 3-4 담임 현황(주제·글자 수만)
     setCurrentWriting({
       ...currentWriting,
       content,
@@ -1554,6 +1559,7 @@ export default function StudentDashboard({ user, userData }) {
           ? currentWriting.minScore
           : PASSING_SCORE;
 
+      presenceBeat(user.uid, userData.classCode, currentWriting.topic, currentWriting.wordCount || 0, "submitted");
       // 제출한 글 내용 저장 (피드백과 함께 표시하기 위해)
       setSubmittedWriting({
         topic: currentWriting.topic,
@@ -1561,6 +1567,8 @@ export default function StudentDashboard({ user, userData }) {
         wordCount: currentWriting.wordCount,
         minScore: requiredScore,
         isAssignment: currentWriting.isAssignment || false,
+        gradeLevel: userData.gradeLevel, // 본보기 글(2-E)
+        genre: currentWriting.genre || null,
         // 고쳐쓰기 전후 비교(1-3)
         previousContent: rewriteMode?.originalContent || null,
         previousCriteria: rewriteMode?.criteria || null,
@@ -3778,6 +3786,12 @@ export default function StudentDashboard({ user, userData }) {
         {/* History Tab */}
         {activeTab === "history" && (
           <div className="space-y-6">
+            <SentencePractice key={user.uid} uid={user.uid} writings={writings} />
+            <PeerInbox />
+            <details className="rounded-2xl border border-pink-200 bg-white/90 p-4" onToggle={(e) => setPeerOpen(e.currentTarget.open)}>
+              <summary className="cursor-pointer text-lg font-bold text-pink-900"><Emo n="Users" /> 친구 글 읽고 칭찬·질문 남기기</summary>
+              {peerOpen && <div className="mt-3"><PeerBoard /></div>}
+            </details>
             {/* 통계 헤더 */}
             <div className="bg-white/90 backdrop-blur rounded-2xl shadow-lg p-6 border border-blue-100">
               <div className="flex flex-wrap items-center justify-between gap-4">

@@ -38,6 +38,9 @@ import {
 } from "../services/schedulerService";
 import { GRADE_LEVELS, MAX_STUDENTS_PER_CLASS } from "../config/auth";
 import TeacherReview, { ProcessSummary } from "../components/TeacherReview";
+import { InsightsPanel, GrowthReport, AnthologyBuilder } from "../components/TeacherInsights";
+import LivePanel from "../components/LivePanel";
+import { PeerQueue, PeerShareToggle } from "../components/PeerNotes";
 import { CRITERIA, GENRES } from "../config/writingOptions";
 import {
   batchCreateStudents,
@@ -184,6 +187,7 @@ function downloadBackupFile(html, filename) {
 }
 
 export default function TeacherDashboard({ user, userData }) {
+  const [peerShared, setPeerShared] = useState(() => new Set()); // 3-2 친구에게 보여 주는 글
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [showClassModal, setShowClassModal] = useState(false);
@@ -778,6 +782,7 @@ export default function TeacherDashboard({ user, userData }) {
         newAssignment.dueDate || null,
         newAssignment.minScore,
         newAssignment.maxAiProbability,
+        { genre: newAssignment.genre || null, focus: newAssignment.focus || [] },
       );
       alert("과제가 출제되었습니다!");
       setShowAssignmentModal(false);
@@ -2680,6 +2685,25 @@ export default function TeacherDashboard({ user, userData }) {
                           </div>
                         </div>
 
+                        {/* 실시간 교실 현황(3-4) */}
+                        {selectedClass && (
+                          <div className="mb-3"><LivePanel key={`live-${expandedTopic}`} classCode={selectedClass.classCode} topic={expandedTopic} students={selectedClass.students} /></div>
+                        )}
+                        {/* 친구 글 칭찬·질문 승인(3-2) */}
+                        {selectedClass && (
+                          <div className="mb-3"><PeerQueue classCode={selectedClass.classCode} onShared={setPeerShared} /></div>
+                        )}
+                        {/* 우리 반 공통 약점(2-G) · 학급 문집(2-I) */}
+                        {topicStudents.length > 0 && selectedClass && (
+                          <div className="space-y-3">
+                            <InsightsPanel key={`ins-${expandedTopic}`} classCode={selectedClass.classCode} topic={expandedTopic} />
+                            <details className="rounded-xl">
+                              <summary className="cursor-pointer text-sm font-semibold text-amber-800"><Emo n="BookOpen" /> 학급 문집 만들기</summary>
+                              <div className="mt-2"><AnthologyBuilder key={`an-${expandedTopic}`} topic={expandedTopic} students={topicStudents} classCode={selectedClass.classCode} /></div>
+                            </details>
+                          </div>
+                        )}
+
                         {/* 학생 카드 그리드 - assignment.submissions에서 즉시 표시 (DB 0회!) */}
                         {topicStudents.length === 0 ? (
                           <div className="text-center py-8 text-gray-400">
@@ -3186,6 +3210,9 @@ export default function TeacherDashboard({ user, userData }) {
                     </div>
                   </div>
 
+                  {/* 항목별 성장 리포트(2-H) — 처음 3편 → 요즘 3편, 인쇄 */}
+                  <GrowthReport key={selectedStudentForGrowth.studentId} studentId={selectedStudentForGrowth.studentId} />
+
                   {/* 점수 추이 그래프 -  경량 차트 사용 */}
                   <div className="bg-gray-50 rounded-xl p-4">
                     <h3 className="font-semibold text-gray-700 mb-4">
@@ -3529,61 +3556,40 @@ export default function TeacherDashboard({ user, userData }) {
                 </div>
               </div>
 
-              {/* 포인트 획득 조건 설정 */}
-              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
-                <h3 className="font-semibold text-emerald-800 mb-3 flex items-center gap-2">
-                  <span><Emo n="Target" /></span> 포인트 획득 조건
-                </h3>
-                <p className="text-xs text-emerald-600 mb-3">
-                  AI 사용 감지에 따른 포인트 지급 기준을 설정합니다.
-                </p>
-
+              {/* 글 종류(2-A)·과제 중점(2-J) — 학생 첨삭이 이 기준으로 보고, 중점 항목부터 «이번에 고칠 것»을 고른다 */}
+              <div className="bg-violet-50 p-4 rounded-xl border border-violet-200 space-y-3">
+                <label className="block text-sm font-semibold text-violet-900">
+                  글 종류
+                  <select
+                    className="field mt-1 w-full"
+                    value={newAssignment.genre || ""}
+                    onChange={(e) => setNewAssignment({ ...newAssignment, genre: e.target.value || null })}
+                  >
+                    <option value="">학생이 고름(주제로 짐작)</option>
+                    {GENRES.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
+                  </select>
+                </label>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    AI 사용 허용치 (기본 50%)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={newAssignment.maxAiProbability}
-                      onChange={(e) =>
-                        setNewAssignment({
-                          ...newAssignment,
-                          maxAiProbability: Number(e.target.value),
-                        })
-                      }
-                      className="flex-1"
-                    />
-                    <span className="text-sm font-bold text-emerald-700 w-12 text-right">
-                      {newAssignment.maxAiProbability}%
-                    </span>
+                  <p className="text-sm font-semibold text-violet-900">이번 과제에서 중점으로 볼 것(최대 3개)</p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {CRITERIA.map((c) => {
+                      const on = (newAssignment.focus || []).includes(c.key);
+                      return (
+                        <button
+                          type="button"
+                          key={c.key}
+                          onClick={() => {
+                            const cur = newAssignment.focus || [];
+                            const next = on ? cur.filter((k) => k !== c.key) : cur.length >= 3 ? cur : [...cur, c.key];
+                            setNewAssignment({ ...newAssignment, focus: next });
+                          }}
+                          className={`rounded-full border px-3 py-1 text-sm ${on ? "border-violet-500 bg-violet-500 text-white" : "border-violet-200 bg-white text-violet-800"}`}
+                        >
+                          {c.name}
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
-
-                <div className="mt-3 space-y-1 p-2 bg-white/60 rounded-lg text-xs text-gray-600">
-                  <p>
-                    <Emo n="CheckCircle2" /> AI 가능성{" "}
-                    <strong>{newAssignment.maxAiProbability}%</strong> 미만:{" "}
-                    <span className="text-emerald-600 font-semibold">
-                      포인트 100% 획득
-                    </span>
-                  </p>
-                  <p>
-                    <Emo n="AlertTriangle" /> AI 가능성{" "}
-                    <strong>{newAssignment.maxAiProbability}%</strong> 이상 ~
-                    80% 미만:{" "}
-                    <span className="text-amber-600 font-semibold">
-                      포인트 50% 획득
-                    </span>
-                  </p>
-                  <p>
-                    <Emo n="XCircle" /> AI 가능성 <strong>80%</strong> 이상:{" "}
-                    <span className="text-red-600 font-semibold">
-                      포인트 미획득
-                    </span>
-                  </p>
                 </div>
               </div>
 
@@ -3947,6 +3953,12 @@ export default function TeacherDashboard({ user, userData }) {
 
               {/* 선생님 확인·한마디·점수(1-7) + 쓰는 과정(2-B) */}
               <ProcessSummary process={selectedWriting.process} />
+              <PeerShareToggle
+                key={`peer-${selectedWriting.writingId}`}
+                writing={selectedWriting}
+                shared={peerShared.has(selectedWriting.writingId)}
+                onChange={(on) => setPeerShared((p) => { const n = new Set(p); on ? n.add(selectedWriting.writingId) : n.delete(selectedWriting.writingId); return n; })}
+              />
               <TeacherReview
                 key={selectedWriting.writingId}
                 writing={selectedWriting}

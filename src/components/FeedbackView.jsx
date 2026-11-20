@@ -4,6 +4,7 @@
 import { useMemo, useState } from "react";
 import Emo from "./Emo";
 import { CRITERIA, GOALS } from "../config/writingOptions";
+import { getExemplar } from "../utils/aiAPI";
 
 // 낱말 단위 차이(LCS) — 고쳐 쓴 곳에 색을 칠한다
 export function wordDiff(a = "", b = "") {
@@ -75,6 +76,40 @@ function NextStep({ step, idx, unlocked }) {
         </div>
       )}
     </li>
+  );
+}
+
+// 잘 쓴 글 한 편 보기(2-E) — 내 글과 나란히. 따라 쓰지 말고 «무엇이 다른지» 찾게.
+function Exemplar({ gradeLevel, genre, topic, mine }) {
+  const [ex, setEx] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const open = async () => {
+    setLoading(true);
+    try {
+      setEx(await getExemplar(gradeLevel, genre, topic));
+    } catch {
+      setEx({ found: false });
+    } finally {
+      setLoading(false);
+    }
+  };
+  if (!ex) {
+    return (
+      <button type="button" onClick={open} disabled={loading} className="w-full rounded-lg border border-sky-200 bg-white px-4 py-3 text-left text-[15px] font-semibold text-sky-800">
+        <Emo n="BookOpen" /> {loading ? "찾는 중…" : "같은 종류의 잘 쓴 글 한 편 보기"}
+      </button>
+    );
+  }
+  if (!ex.found) return <p className="text-sm text-gray-500">이 종류의 본보기 글이 아직 없어요.</p>;
+  return (
+    <div className="rounded-lg border border-sky-200 bg-white p-4">
+      <p className="mb-2 font-semibold text-sky-800"><Emo n="BookOpen" /> 본보기 글 · {ex.title}</p>
+      <p className="mb-3 text-sm text-sky-900">따라 쓰지 말고, 내 글과 «무엇이 다른지» 하나만 찾아보세요. 처음을 어떻게 열었나요? 느낌을 어떻게 썼나요?</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md bg-sky-50 p-3 text-sm leading-relaxed">{ex.content}</div>
+        {mine && <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-sm leading-relaxed"><b className="block text-gray-500">내 글</b>{mine}</div>}
+      </div>
+    </div>
   );
 }
 
@@ -195,6 +230,10 @@ export default function FeedbackView({ feedback, writing }) {
         </div>
       )}
       {!diff && f.growthNote && <p className="rounded-lg bg-teal-50 p-3 text-[15px] text-teal-900">{f.growthNote}</p>}
+
+      {writing?.gradeLevel && (
+        <Exemplar gradeLevel={writing.gradeLevel} genre={f.genre || writing.genre} topic={writing.topic} mine={writing.content} />
+      )}
 
       {f.overallFeedback && (
         <div className="rounded-lg border border-indigo-200 bg-white p-4">

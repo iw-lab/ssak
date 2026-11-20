@@ -101,3 +101,30 @@ export async function checkSsakDBStatus() {
     throw error;
   }
 }
+
+// 잘 쓴 글 한 편(2-E) — 싹DB 본보기 글, AI 0원
+export async function getExemplar(gradeLevel, genre, topic) {
+  const fn = httpsCallable(functions, "getExemplar");
+  const r = await fn({ gradeLevel, genre, topic });
+  return r.data;
+}
+
+// 교사용 모아 보기(2-G·2-H) · 관리자 품질 재기(2-K)
+export async function getClassInsights(classCode, topic) {
+  return (await httpsCallable(functions, "classInsights")({ classCode, topic })).data;
+}
+export async function getStudentReport(studentId) {
+  return (await httpsCallable(functions, "studentReport")({ studentId })).data;
+}
+export async function getQualityReport(runConsistency = false) {
+  return (await httpsCallable(functions, "qualityReport")({ runConsistency })).data;
+}
+
+// 3-2 친구 글 칭찬·질문
+const call = async (name, data) => (await httpsCallable(functions, name)(data || {})).data;
+export const peerShare = (writingId, on) => call("peerShare", { writingId, on });
+export const peerList = () => call("peerList");
+export const peerSend = (shareId, praise, question) => call("peerSend", { shareId, praise, question });
+export const peerInbox = () => call("peerInbox");
+export const peerPending = (classCode) => call("peerPending", { classCode });
+export const peerDecide = (noteId, approve, createdAt) => call("peerDecide", { noteId, approve, createdAt });

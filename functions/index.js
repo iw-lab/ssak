@@ -370,10 +370,10 @@ async function getSsakExample(gradeLevel, topic, level = "high") {
   }
 
   try {
-    // 1차: education_level, genre, level로 검색
+    // 1차: education_level, genre, level로 검색 — 데이터엔 «초등»과 «초등학교»가 섞여 있다(2026-11-20 실측 748편)
     let snapshot = await db
       .collection("examples")
-      .where("education_level", "==", exampleEducationLevel)
+      .where("education_level", "in", [exampleEducationLevel, `${exampleEducationLevel}학교`])
       .where("genre", "==", genre)
       .where("level", "==", koreanLevel)
       .limit(1)
@@ -3911,4 +3911,215 @@ exports.cleanupAnalyses = onSchedule({ schedule: "0 19 * * *", timeZone: "UTC" }
   const a = await sweep("analyses", 30);
   const c = await sweep("analysisCache", ANALYSIS_CACHE_DAYS);
   console.log(`[정리] 첨삭 서명 ${a}개 · 같은 글 기록 ${c}개 삭제`);
+});
+
+
+// 📖 잘 쓴 글 한 편 보기(2-E, Graham & Perin «본보기 글»). 싹DB examples(748편)에서 같은 장르 «상» 글을 고른다. AI 0원.
+const EXEMPLAR_GENRE = { diary: ["일기"], review: ["독후감", "독서감상문"], letter: ["편지"], opinion: ["논설문"], explain: ["설명문"], story: ["이야기"], free: ["생활문", "일기"] };
+exports.getExemplar = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  const { gradeLevel, genre, topic } = request.data || {};
+  const names = Object.hasOwn(EXEMPLAR_GENRE, String(genre)) ? EXEMPLAR_GENRE[genre] : EXEMPLAR_GENRE.free;
+  const lv = gradeLevel === "middle" ? ["중", "중학교"] : gradeLevel === "high" ? ["고", "고등학교"] : ["초등", "초등학교"];
+  const snap = await db.collection("examples").where("genre", "in", names).where("level", "==", "상").limit(300).get();
+  // 학교급이 다른 글로 대신하지 않는다 · 문서 id 순으로 고정해 같은 주제면 늘 같은 글
+  const docs = snap.docs.filter((d) => lv.includes(d.data().education_level)).sort((a, b) => a.id.localeCompare(b.id));
+  if (!docs.length) return { found: false };
+  const h = [...String(topic || "")].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const ex = docs[h % docs.length].data();
+  const content = String(ex.content || "").replace(/^제목:\s*[^\n]*\n+/, "").slice(0, 3000);
+  return { found: true, title: String(ex.title || "").slice(0, 80), content, genre: ex.genre };
+});
+
+// ============================================
+// 📊 교사용 모아 보기(2026-11-20 업그레이드 2-G·2-H·2-K) — 계산은 functions/insights.js(시험 test-insights.mjs)
+// ============================================
+const INS = require("./insights.js");
+
+// 2-G 우리 반 공통 약점 — 과제(주제) 하나. 학생 글 원문은 돌려주지 않는다.
+exports.classInsights = onCall(async (request) => {
+  const { classCode, topic } = request.data || {};
+  await assertClassOwner(request, classCode);
+  if (typeof topic !== "string" || !topic || topic.length > 200) throw new HttpsError("invalid-argument", "주제가 필요합니다.");
+  const snap = await db.collection("writings").where("classCode", "==", classCode).where("topic", "==", topic).where("isDraft", "==", false).limit(200).get();
+  return INS.classInsights(snap.docs.map((d) => d.data()));
+});
+
+// 2-H 학생 성장 리포트 — 그 학생의 담임(또는 관리자)만
+exports.studentReport = onCall(async (request) => {
+  const { studentId } = request.data || {};
+  // 로그인·교사 여부를 학생 조회보다 먼저(남이 학생 id 가 있는지 떠보지 못하게)
+  if (!request.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (typeof studentId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(studentId)) throw new HttpsError("invalid-argument", "studentId 가 필요합니다.");
+  const me = (await db.doc(`users/${request.auth.uid}`).get()).data();
+  if (!(me?.role === "super_admin" || (me?.role === "teacher" && me.approved === true))) throw new HttpsError("permission-denied", "승인된 교사만 할 수 있습니다.");
+  const stu = (await db.doc(`users/${studentId}`).get()).data();
+  if (!stu || stu.role !== "student" || !stu.classCode) throw new HttpsError("permission-denied", "해당 클래스의 담당 교사만 할 수 있습니다.");
+  await assertClassOwner(request, stu.classCode);
+  // 최근 300편(학생 화면과 같은 색인 studentId+createdAt) → 지금 반·낸 글만
+  const snap = await db.collection("writings").where("studentId", "==", studentId).orderBy("createdAt", "desc").limit(300).get();
+  return { name: stu.name || "학생", ...INS.studentReport(snap.docs.map((d) => d.data()).filter((w) => w.classCode === stu.classCode && !w.isDraft)) };
+});
+
+// 2-K 품질 재는 자(관리자) — ① 교사가 고친 점수와 AI 점수의 차이(AI 0원) ② 같은 글 3편을 3번씩 다시 채점해 흔들림(약 9회 호출)
+const QUALITY_SAMPLES = [
+  { topic: "나의 하루", gradeLevel: "elementary_3_4", genre: "diary", text: "오늘은 비가 와서 운동장에 못 나갔다. 그래서 교실에서 친구들과 공기놀이를 했다. 처음에는 계속 떨어뜨렸는데 다섯 번째 판에서 꺾기까지 성공했다. 친구가 박수를 쳐 줘서 얼굴이 빨개졌다. 비 오는 날도 재미있을 수 있다는 걸 알았다." },
+  { topic: "학교에 휴대전화를 가져와도 될까", gradeLevel: "elementary_5_6", genre: "opinion", text: "나는 학교에 휴대전화를 가져와도 된다고 생각한다. 첫째, 하교할 때 부모님과 연락할 수 있다. 둘째, 수업 시간에 모르는 낱말을 바로 찾아볼 수 있다. 물론 게임을 하는 친구가 있을 수 있지만 쉬는 시간에만 쓰자는 규칙을 정하면 된다. 그러므로 규칙을 지킨다면 휴대전화를 가져와도 된다." },
+  { topic: "고마운 사람에게", gradeLevel: "elementary_1_2", genre: "letter", text: "할머니께. 할머니 안녕하세요. 저번에 맛있는 떡을 만들어 주셔서 고맙습니다. 떡이 쫀득쫀득해서 동생이랑 다 먹었어요. 다음에 또 놀러 갈게요. 건강하세요. 손녀 올림." },
+];
+exports.qualityReport = onCall({ secrets: [anthropicApiKey], timeoutSeconds: 300 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  const me = (await db.doc(`users/${request.auth.uid}`).get()).data();
+  if (me?.role !== "super_admin") throw new HttpsError("permission-denied", "관리자만 볼 수 있습니다.");
+  const snap = await db.collection("writings").where("teacherCheckedAt", ">", "").limit(500).get();
+  const agreement = INS.teacherAgreement(snap.docs.map((d) => d.data()));
+  const last = (await db.doc("settings/qualityReport").get()).data() || null;
+  if (request.data?.runConsistency !== true) return { agreement, consistency: last?.consistency || null, at: last?.at || null };
+  // 유료 9회 — 10분에 한 번만
+  if (last?.at && Date.now() - Date.parse(last.at) < 10 * 60 * 1000) throw new HttpsError("resource-exhausted", "10분 안에 다시 잴 수 없어요(방금 잰 값을 보여 줍니다).");
+
+  // 같은 글 흔들림 — 같은 글 기록(analysisCache)을 거치지 않고 새로 채점한다
+  const consistency = [];
+  for (const smp of QUALITY_SAMPLES) {
+    const scores = [];
+    for (let i = 0; i < 3; i++) {
+      await guardAI(request);
+      try {
+        const prompt = FB.buildAnalysisPrompt({ grade: smp.gradeLevel, topic: smp.topic, text: smp.text, wordCount: smp.text.replace(/\s/g, "").length, idealWordCount: IDEAL_WORDS[smp.gradeLevel], genre: smp.genre });
+        const out = await callAI(prompt, { masked: true, maxTokens: 4096, systemPrompt: SYSTEM_PROMPTS.writingAnalyzer });
+        const m = out.match(/\{[\s\S]*\}/);
+        if (m) scores.push(FB.normalizeAnalysis(JSON.parse(m[0]), smp.text).score);
+      } catch (e) {
+        console.warn("[품질 재기] 실패", e.message);
+      }
+    }
+    consistency.push({ topic: smp.topic, ...INS.spread(scores) });
+  }
+  const at = new Date().toISOString();
+  await db.doc("settings/qualityReport").set({ at, agreement, consistency });
+  return { agreement, consistency, at };
+});
+
+// ───────────── 3-2 친구 글에 칭찬 1 + 질문 1 (2026-11-20) ─────────────
+//   peerShares/{writingId} = 담임이 고른 글의 «가린 사본»(글쓴이 칸은 서버만 읽는다)
+//   peerNotes/{shareId_fromUid} = 친구가 남긴 말(pending → 담임 승인 → 글쓴이에게)
+//   두 모음 모두 규칙으로 막고(firestore.rules) 함수로만 다룬다.
+const PEER = require("./peer.js");
+
+async function studentMe(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  const me = (await db.doc(`users/${request.auth.uid}`).get()).data();
+  if (me?.role !== "student" || !me.classCode) throw new HttpsError("permission-denied", "학생만 할 수 있습니다.");
+  return me;
+}
+
+exports.peerShare = onCall(async (request) => {
+  const { writingId, on } = request.data || {};
+  if (!PEER.isId(writingId)) throw new HttpsError("invalid-argument", "글이 필요합니다.");
+  const w = (await db.doc(`writings/${writingId}`).get()).data();
+  if (!w || w.isDraft) throw new HttpsError("not-found", "글을 찾을 수 없습니다.");
+  const cls = await assertClassOwner(request, w.classCode);
+  const ref = db.doc(`peerShares/${writingId}`);
+  if (!on) {
+    await ref.delete(); // 공유부터 끊는다(peerSend 가 트랜잭션 안에서 공유를 다시 읽으므로 새 말이 더 붙지 않는다)
+    for (;;) {
+      const notes = await db.collection("peerNotes").where("shareId", "==", writingId).limit(400).get();
+      if (notes.empty) break;
+      const batch = db.batch();
+      notes.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    return { on: false };
+  }
+  // 반 아이들 이름도 함께 가린다(친구 이름이 글에 나올 수 있다)
+  const names = [...new Set((cls.students || []).flatMap((s) => [s.studentName, s.name, s.nickname]).filter((x) => typeof x === "string" && x.length >= 2))];
+  const masked = (await maskForAI(String(w.content || "").slice(0, 4000), names)).text;
+  const maskedTopic = (await maskForAI(String(w.topic || "").slice(0, 200), names)).text; // 주제에 이름을 쓴 아이도 있다
+  await ref.set({ classCode: w.classCode, topic: maskedTopic, content: masked, ownerId: w.studentId, sharedAt: new Date().toISOString() });
+  return { on: true };
+});
+
+exports.peerList = onCall(async (request) => {
+  const me = await studentMe(request);
+  const snap = await db.collection("peerShares").where("classCode", "==", me.classCode).limit(60).get();
+  const mine = await db.collection("peerNotes").where("fromId", "==", request.auth.uid).where("classCode", "==", me.classCode).limit(60).get();
+  const sent = new Set(mine.docs.map((d) => d.data().shareId));
+  return {
+    items: snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((s) => s.ownerId !== request.auth.uid)
+      .sort((a, b) => String(b.sharedAt).localeCompare(String(a.sharedAt)))
+      .slice(0, 30)
+      .map((s) => PEER.shareView(s, sent)),
+  };
+});
+
+exports.peerSend = onCall(async (request) => {
+  const me = await studentMe(request);
+  const { shareId, praise, question } = request.data || {};
+  if (!PEER.isId(shareId)) throw new HttpsError("invalid-argument", "글이 필요합니다.");
+  const why = PEER.checkNote({ praise, question });
+  if (why) throw new HttpsError("invalid-argument", why);
+  const shareRef = db.doc(`peerShares/${shareId}`);
+  const day = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const ref = db.doc(`peerNotes/${shareId}_${request.auth.uid}`);
+  const capRef = db.doc(`usage/peer_${request.auth.uid}_${day}`);
+  await db.runTransaction(async (tx) => {
+    const [sh, n, cap] = await Promise.all([tx.get(shareRef), tx.get(ref), tx.get(capRef)]);
+    const share = sh.data(); // 트랜잭션 안에서 읽는다 — 담임이 방금 공유를 끄면 여기서 막힌다
+    if (!share || share.classCode !== me.classCode) throw new HttpsError("not-found", "글을 찾을 수 없습니다.");
+    if (share.ownerId === request.auth.uid) throw new HttpsError("failed-precondition", "내 글에는 남길 수 없어요.");
+    if (n.exists) throw new HttpsError("already-exists", "이 글에는 이미 남겼어요.");
+    if ((cap.data()?.count || 0) >= PEER.DAILY_NOTES) throw new HttpsError("resource-exhausted", `하루에 ${PEER.DAILY_NOTES}개까지 남길 수 있어요.`);
+    tx.set(capRef, { count: (cap.data()?.count || 0) + 1, at: new Date().toISOString() });
+    tx.create(ref, {
+      shareId, classCode: me.classCode, toId: share.ownerId, fromId: request.auth.uid, fromName: String(me.name || "").slice(0, 40),
+      topic: share.topic, praise: String(praise).trim(), question: String(question).trim(), status: "pending", createdAt: new Date().toISOString(),
+    });
+  });
+  return { ok: true };
+});
+
+// 글쓴이: 승인된 말만(누가 썼는지는 안 보인다)
+exports.peerInbox = onCall(async (request) => {
+  const me = await studentMe(request);
+  const snap = await db.collection("peerNotes").where("toId", "==", request.auth.uid).where("status", "==", "approved").limit(100).get();
+  return {
+    items: snap.docs.map((d) => d.data()).filter((n) => n.classCode === me.classCode) // 반을 옮기면 옛 반 말은 안 보인다
+      .sort((a, b) => String(b.decidedAt).localeCompare(String(a.decidedAt)))
+      .map((n) => ({ topic: n.topic, praise: n.praise, question: n.question, at: n.decidedAt })),
+  };
+});
+
+// 담임: 기다리는 말(누가 누구에게 썼는지 보인다) · 승인/거절
+exports.peerPending = onCall(async (request) => {
+  const { classCode } = request.data || {};
+  const cls = await assertClassOwner(request, classCode);
+  const snap = await db.collection("peerNotes").where("classCode", "==", classCode).where("status", "==", "pending").limit(200).get();
+  const nameOf = Object.fromEntries((cls.students || []).map((s) => [s.studentId, s.studentName || s.name || s.nickname || "학생"]));
+  const shares = await db.collection("peerShares").where("classCode", "==", classCode).limit(60).get();
+  return {
+    items: snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+      .map((n) => ({ id: n.id, topic: n.topic, praise: n.praise, question: n.question, from: nameOf[n.fromId] || n.fromName || "학생", to: nameOf[n.toId] || "학생", at: n.createdAt })),
+    shared: shares.docs.map((d) => d.id),
+  };
+});
+
+exports.peerDecide = onCall(async (request) => {
+  const { noteId, approve } = request.data || {};
+  if (!PEER.isId(noteId, 300)) throw new HttpsError("invalid-argument", "말이 필요합니다.");
+  const ref = db.doc(`peerNotes/${noteId}`);
+  const n = (await ref.get()).data();
+  if (!n) throw new HttpsError("not-found", "찾을 수 없습니다.");
+  await assertClassOwner(request, n.classCode);
+  // 담임이 읽은 그 말만 — 그사이 지워지고 새로 온 말(같은 id)을 옛 화면에서 승인하지 않게 내용까지 맞춘다
+  await db.runTransaction(async (tx) => {
+    const cur = (await tx.get(ref)).data();
+    if (!cur || cur.status !== "pending") throw new HttpsError("failed-precondition", "이미 처리된 말이에요. 목록을 새로 고쳐 주세요.");
+    if (typeof request.data.createdAt !== "string" || cur.createdAt !== request.data.createdAt) throw new HttpsError("failed-precondition", "그사이 새로 온 말이에요. 목록을 새로 고쳐 주세요.");
+    if (approve) tx.update(ref, { status: "approved", decidedAt: new Date().toISOString() });
+    else tx.delete(ref);
+  });
+  return { ok: true };
 });
