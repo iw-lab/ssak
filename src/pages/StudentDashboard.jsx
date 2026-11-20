@@ -1,6 +1,9 @@
 import { LogOut } from "lucide-react";
 import Emo from "../components/Emo.jsx";
 import MaskPreviewModal from "../components/MaskPreviewModal";
+import FeedbackView, { RewriteGuide } from "../components/FeedbackView";
+import { GENRES, GOALS, guessGenre } from "../config/writingOptions";
+import ThinkFirst from "../components/ThinkFirst";
 import {
   useState,
   useEffect,
@@ -1186,7 +1189,36 @@ export default function StudentDashboard({ user, userData }) {
     }
   };
 
+  // ✍️ 쓰는 과정 기록(2-B) — «AI 확률» 판정 대신, 어떻게 썼는지를 숫자로 남겨 선생님께 보여 준다(글 내용은 안 남김)
+  const processRef = useRef(null);
+  const resetProcess = () => {
+    processRef.current = { startedAt: Date.now(), lastAt: 0, activeMs: 0, inputs: 0, bigInserts: 0, speechInserts: 0, pasteBlocked: 0, helps: {} };
+  };
+  const noteInput = (added) => {
+    const p = processRef.current || (resetProcess(), processRef.current);
+    const now = Date.now();
+    if (p.lastAt && now - p.lastAt < 60000) p.activeMs += now - p.lastAt; // 1분 넘게 멈춘 시간은 «쓴 시간»에서 뺀다
+    p.lastAt = now;
+    p.inputs++;
+    if (added > 40) (isListening ? p.speechInserts++ : p.bigInserts++);
+  };
+  const processSummary = () => {
+    const p = processRef.current;
+    if (!p) return null;
+    return {
+      minutes: Math.round((Date.now() - p.startedAt) / 60000),
+      activeMinutes: Math.round(p.activeMs / 60000),
+      inputs: p.inputs,
+      bigInserts: p.bigInserts,
+      speechInserts: p.speechInserts,
+      pasteBlocked: p.pasteBlocked,
+      helps: p.helps,
+    };
+  };
+
   const handleGetAIHelp = async (helpType) => {
+    const pr = processRef.current || (resetProcess(), processRef.current);
+    pr.helps[helpType] = (pr.helps[helpType] || 0) + 1;
     if (!currentWriting.content && helpType !== "hint") {
       alert("먼저 글을 작성해주세요.");
       return;
@@ -1302,6 +1334,7 @@ export default function StudentDashboard({ user, userData }) {
       }
     }
 
+    resetProcess();
     setCurrentWriting({
       ...currentWriting,
       topic: topic.title,
@@ -1309,6 +1342,9 @@ export default function StudentDashboard({ user, userData }) {
       wordCount: recoveredWordCount,
       isAssignment: topic.isAssignment || false,
       minScore: topicMinScore,
+      genre: topic.genre || guessGenre(topic.title), // 2-A 과제가 정한 장르, 없으면 주제로 짐작(학생이 바꿀 수 있음)
+      focus: Array.isArray(topic.focus) ? topic.focus : [], // 2-J 선생님이 정한 과제 중점
+      goal: null, // 2-D 이번 글 목표(학생이 고름)
     });
     setFeedback(null);
     setQuickAdvice(null);
@@ -1323,6 +1359,7 @@ export default function StudentDashboard({ user, userData }) {
         ? e.target.value.slice(0, 10000)
         : e.target.value;
     const wordCount = content.replace(/\s/g, "").length;
+    noteInput(content.length - (currentWriting.content || "").length);
     setCurrentWriting({
       ...currentWriting,
       content,
@@ -1497,6 +1534,7 @@ export default function StudentDashboard({ user, userData }) {
         ...currentWriting,
         previousScore: previousScoreForRewrite,
         maskWords,
+        process: processSummary(), // 2-B 쓰는 과정(숫자만)
       };
 
       const result = await submitWriting(
@@ -1523,11 +1561,13 @@ export default function StudentDashboard({ user, userData }) {
         wordCount: currentWriting.wordCount,
         minScore: requiredScore,
         isAssignment: currentWriting.isAssignment || false,
+        // 고쳐쓰기 전후 비교(1-3)
+        previousContent: rewriteMode?.originalContent || null,
+        previousCriteria: rewriteMode?.criteria || null,
       });
 
       setFeedback({
         ...result.analysis,
-        aiUsageCheck: result.aiUsageCheck,
         score: result.score,
         earnedPoints: result.earnedPoints || 0, // 획득 포인트 정보 추가
         notSaved: result.notSaved || false, // 저장 안됨 플래그
@@ -2428,6 +2468,8 @@ export default function StudentDashboard({ user, userData }) {
                                 description: assignment.description,
                                 isAssignment: true,
                                 minScore: assignmentMinScore,
+                                genre: assignment.genre || null,
+                                focus: assignment.focus || [],
                               })
                             }
                             className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
@@ -2601,6 +2643,33 @@ export default function StudentDashboard({ user, userData }) {
                       </div>
                     </div>
 
+                    {/* 글 종류(2-A)·이번 글 목표(2-D) — 첨삭이 이 기준으로 본다 */}
+                    {currentWriting.topic && !rewriteMode && (
+                      <div className="mb-4 grid gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3 sm:grid-cols-2">
+                        <label className="block text-sm font-bold text-violet-900">
+                          글 종류
+                          <select
+                            className="field mt-1 w-full"
+                            value={currentWriting.genre || "free"}
+                            onChange={(e) => setCurrentWriting({ ...currentWriting, genre: e.target.value })}
+                          >
+                            {GENRES.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="block text-sm font-bold text-violet-900">
+                          이번 글 목표(하나 고르기)
+                          <select
+                            className="field mt-1 w-full"
+                            value={currentWriting.goal || ""}
+                            onChange={(e) => setCurrentWriting({ ...currentWriting, goal: e.target.value || null })}
+                          >
+                            <option value="">고르지 않음</option>
+                            {GOALS.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                    )}
+
                     {/* 고쳐쓰기 모드 배너 */}
                     {rewriteMode && (
                       <div className="mb-4 p-3 bg-orange-100 border-2 border-orange-300 rounded-xl">
@@ -2628,184 +2697,10 @@ export default function StudentDashboard({ user, userData }) {
                       </div>
                     )}
 
-                    {/* 고쳐쓰기 모드: 원본 글에서 수정 필요 부분 강조 + AI 제안 통합 */}
-                    {rewriteMode &&
-                      rewriteMode.detailedFeedback &&
-                      rewriteMode.detailedFeedback.length > 0 && (
-                        <div className="mb-3 p-4 bg-orange-50 border-2 border-orange-300 rounded-xl">
-                          {/* 빨간색 강조된 원본 글 */}
-                          <div className="mb-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center text-sm">
-                                <Emo n="Pin" />
-                              </span>
-                              <span className="font-bold text-orange-800">
-                                원본 글 (수정이 필요한 부분은 빨간색)
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-white p-3 rounded-lg border border-orange-200">
-                              {(() => {
-                                // 원본 내용 사용 (rewriteMode.originalContent)
-                                let highlightedContent =
-                                  rewriteMode.originalContent ||
-                                  currentWriting.content;
-                                // 수정 필요 문장 필터링: 현재 글에 실제로 존재하는 것만 강조
-                                const validFeedback =
-                                  rewriteMode.detailedFeedback.filter(
-                                    (item) =>
-                                      item.original &&
-                                      highlightedContent.includes(
-                                        item.original,
-                                      ),
-                                  );
-                                // 수정이 필요한 문장들을 빨간색으로 강조
-                                validFeedback.forEach((item) => {
-                                  highlightedContent =
-                                    highlightedContent.replace(
-                                      item.original,
-                                      `<mark class="bg-red-200 text-red-800 px-1 rounded font-medium">${item.original}</mark>`,
-                                    );
-                                });
-                                // XSS 방지: mark 태그만 허용하고 나머지 HTML은 이스케이프
-                                const sanitized = highlightedContent
-                                  .replace(
-                                    /<mark class="bg-red-200 text-red-800 px-1 rounded font-medium">/g,
-                                    "{{MARK_OPEN}}",
-                                  )
-                                  .replace(/<\/mark>/g, "{{MARK_CLOSE}}")
-                                  .replace(/</g, "&lt;")
-                                  .replace(/>/g, "&gt;")
-                                  .replace(
-                                    /\{\{MARK_OPEN\}\}/g,
-                                    '<mark class="bg-red-200 text-red-800 px-1 rounded font-medium">',
-                                  )
-                                  .replace(/\{\{MARK_CLOSE\}\}/g, "</mark>");
-                                return (
-                                  <div
-                                    dangerouslySetInnerHTML={{
-                                      __html: sanitized,
-                                    }}
-                                  />
-                                );
-                              })()}
-                            </div>
-                          </div>
-
-                          {/* AI 수정 제안 목록 - 현재 글에 존재하는 항목만 표시 */}
-                          {(() => {
-                            const originalContent =
-                              rewriteMode.originalContent ||
-                              currentWriting.content;
-                            const validFeedback =
-                              rewriteMode.detailedFeedback.filter(
-                                (item) =>
-                                  item.original &&
-                                  originalContent.includes(item.original),
-                              );
-                            if (validFeedback.length === 0) return null;
-                            return (
-                              <div>
-                                <div className="flex items-center gap-2 mb-3">
-                                  <span className="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center text-sm">
-                                    <Emo n="PenLine" />
-                                  </span>
-                                  <span className="font-bold text-orange-800">
-                                    AI가 제안하는 수정 사항
-                                  </span>
-                                </div>
-                                <div className="space-y-3">
-                                  {validFeedback.map((item, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="bg-white rounded-lg p-3 border border-orange-200 shadow-sm"
-                                    >
-                                      <div className="flex items-start gap-2">
-                                        <span className="flex-shrink-0 w-5 h-5 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-xs font-bold">
-                                          {idx + 1}
-                                        </span>
-                                        <div className="flex-1">
-                                          <div className="mb-2">
-                                            <span className="text-xs text-gray-500 block mb-1">
-                                              원본:
-                                            </span>
-                                            <p className="text-sm bg-red-50 text-red-700 px-2 py-1 rounded border-l-4 border-red-400 font-medium">
-                                              "{item.original}"
-                                            </p>
-                                          </div>
-                                          <div className="mb-2">
-                                            <span className="text-xs text-gray-500 block mb-1">
-                                              이렇게 고쳐보세요:
-                                            </span>
-                                            <p className="text-sm bg-emerald-50 text-emerald-700 px-2 py-1 rounded border-l-4 border-emerald-400 font-medium">
-                                              "{item.suggestion}"
-                                            </p>
-                                          </div>
-                                          <p className="text-xs text-gray-600 flex items-center gap-1">
-                                            <span className="text-amber-500">
-                                              <Emo n="Lightbulb" />
-                                            </span>{" "}
-                                            {item.reason}
-                                            {item.type && (
-                                              <span
-                                                className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
-                                                  item.type === "grammar"
-                                                    ? "bg-blue-100 text-blue-600"
-                                                    : item.type === "vocabulary"
-                                                      ? "bg-purple-100 text-purple-600"
-                                                      : item.type ===
-                                                          "structure"
-                                                        ? "bg-green-100 text-green-600"
-                                                        : "bg-gray-100 text-gray-600"
-                                                }`}
-                                              >
-                                                {item.type === "grammar"
-                                                  ? "문법"
-                                                  : item.type === "vocabulary"
-                                                    ? "어휘"
-                                                    : item.type === "structure"
-                                                      ? "구조"
-                                                      : item.type ===
-                                                          "expression"
-                                                        ? "표현"
-                                                        : item.type}
-                                              </span>
-                                            )}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()}
-
-                          {/* 개선사항 목록 */}
-                          {rewriteMode.improvements &&
-                            rewriteMode.improvements.length > 0 && (
-                              <div className="mt-4 pt-3 border-t border-orange-200">
-                                <h5 className="font-semibold text-orange-700 text-sm mb-2">
-                                  <Emo n="Dumbbell" /> 추가 개선 포인트
-                                </h5>
-                                <ul className="space-y-1">
-                                  {rewriteMode.improvements.map(
-                                    (improvement, idx) => (
-                                      <li
-                                        key={idx}
-                                        className="text-sm text-orange-600 flex items-start gap-2"
-                                      >
-                                        <span className="text-orange-400">
-                                          •
-                                        </span>
-                                        {improvement}
-                                      </li>
-                                    ),
-                                  )}
-                                </ul>
-                              </div>
-                            )}
-                        </div>
-                      )}
+                    {/* 고쳐쓰기 길잡이(2026-11-20) — 고칠 곳·까닭·힌트만. 그 구절을 내가 바꾸면 예시가 열린다 */}
+                    {rewriteMode && (
+                      <RewriteGuide rewrite={rewriteMode} content={currentWriting.content} />
+                    )}
 
                     {/* 글자 수 축하 애니메이션 */}
                     {showWordCountCelebration && (
@@ -2859,6 +2754,8 @@ export default function StudentDashboard({ user, userData }) {
                       onChange={handleContentChange}
                       onPaste={(e) => {
                         e.preventDefault();
+                        const pp = processRef.current || (resetProcess(), processRef.current);
+                        pp.pasteBlocked++;
                         alert(
                           "붙여넣기가 차단되었습니다.\n\n직접 글을 작성해 주세요! \n\nAI 힌트는 참고만 하고, 자신의 말로 다시 써보세요.",
                         );
@@ -3005,24 +2902,17 @@ export default function StudentDashboard({ user, userData }) {
                                     </ul>
                                   </div>
                                 )}
-                                {aiHelp.content.questions && (
-                                  <div className="mt-2">
-                                    <p className="text-xs font-medium text-yellow-700 mb-1">
-                                      <Emo n="HelpCircle" /> 생각해볼 질문:
-                                    </p>
-                                    <ul className="space-y-1">
-                                      {aiHelp.content.questions.map(
-                                        (q, idx) => (
-                                          <li
-                                            key={idx}
-                                            className="text-sm text-yellow-800 pl-2 border-l-2 border-orange-300"
-                                          >
-                                            {q}
-                                          </li>
-                                        ),
-                                      )}
-                                    </ul>
-                                  </div>
+                                {aiHelp.content.questions?.length > 0 && (
+                                  <ThinkFirst
+                                    key={aiHelp.content.questions.join("|")}
+                                    questions={aiHelp.content.questions}
+                                    onInsert={(outline) => {
+                                      const pr = processRef.current || (resetProcess(), processRef.current);
+                                      pr.helps.outline = (pr.helps.outline || 0) + 1;
+                                      const content = `${outline}\n\n${currentWriting.content || ""}`.slice(0, 10000);
+                                      setCurrentWriting({ ...currentWriting, content, wordCount: content.replace(/\s/g, "").length });
+                                    }}
+                                  />
                                 )}
                               </div>
                             )}
@@ -3051,13 +2941,14 @@ export default function StudentDashboard({ user, userData }) {
                                               className="text-xs text-yellow-800 bg-white p-2 rounded border border-yellow-100"
                                             >
                                               <div className="flex flex-wrap items-start gap-1">
-                                                <span className="line-through text-red-500">
-                                                  "{suggestion.original}"
+                                                <span className="rounded bg-amber-50 px-1 text-amber-900">
+                                                  «{suggestion.original}»
                                                 </span>
-                                                <span className="mx-1">→</span>
-                                                <span className="text-green-600 font-medium">
-                                                  "{suggestion.improved}"
-                                                </span>
+                                                {suggestion.hint && (
+                                                  <span className="text-indigo-800 font-medium">
+                                                    <Emo n="HelpCircle" /> {suggestion.hint}
+                                                  </span>
+                                                )}
                                               </div>
                                               {suggestion.reason && (
                                                 <p className="text-gray-500 mt-1 text-xs">
@@ -3729,253 +3620,8 @@ export default function StudentDashboard({ user, userData }) {
                           </div>
                         )}
 
-                        {/* AI 활용 분석 */}
-                        {feedback.aiUsageCheck && (
-                          <div
-                            className={`rounded-xl border-2 p-5 ${
-                              feedback.aiUsageCheck.verdict === "HIGH"
-                                ? "bg-red-50 border-red-200"
-                                : feedback.aiUsageCheck.verdict === "MEDIUM"
-                                  ? "bg-amber-50 border-amber-200"
-                                  : "bg-emerald-50 border-emerald-200"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-4">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xl"><Emo n="Bot" /></span>
-                                <h4 className="font-semibold text-gray-800">
-                                  AI 활용 분석
-                                </h4>
-                              </div>
-                              <div
-                                className={`px-4 py-1.5 rounded-full text-sm font-semibold ${
-                                  feedback.aiUsageCheck.verdict === "HIGH"
-                                    ? "bg-red-200 text-red-800"
-                                    : feedback.aiUsageCheck.verdict === "MEDIUM"
-                                      ? "bg-amber-200 text-amber-800"
-                                      : "bg-emerald-200 text-emerald-800"
-                                }`}
-                              >
-                                AI 가능성 {feedback.aiUsageCheck.aiProbability}%
-                              </div>
-                            </div>
-                            {feedback.aiUsageCheck.explanation && (
-                              <p className="text-sm text-gray-700 mb-3">
-                                {feedback.aiUsageCheck.explanation}
-                              </p>
-                            )}
-                            {feedback.aiUsageCheck.humanLikeFeatures?.length >
-                              0 && (
-                              <div className="mb-3">
-                                <p className="text-xs text-emerald-700 font-medium mb-2">
-                                  사람이 쓴 것 같은 특징:
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                  {feedback.aiUsageCheck.humanLikeFeatures.map(
-                                    (feature, idx) => (
-                                      <span
-                                        key={idx}
-                                        className="inline-flex items-center gap-1 px-3 py-1 bg-white/60 rounded-full text-xs text-emerald-700"
-                                      >
-                                        <span><Emo n="Check" /></span> {feature}
-                                      </span>
-                                    ),
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                            {feedback.aiUsageCheck.aiLikeFeatures?.length > 0 &&
-                              feedback.aiUsageCheck.verdict !== "LOW" && (
-                                <div>
-                                  <p className="text-xs text-amber-700 font-medium mb-2">
-                                    AI가 쓴 것 같은 특징:
-                                  </p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {feedback.aiUsageCheck.aiLikeFeatures.map(
-                                      (feature, idx) => (
-                                        <span
-                                          key={idx}
-                                          className="inline-flex items-center gap-1 px-3 py-1 bg-white/60 rounded-full text-xs text-amber-700"
-                                        >
-                                          <span><Emo n="AlertTriangle" /></span> {feature}
-                                        </span>
-                                      ),
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                          </div>
-                        )}
-
-                        {/* 상세 피드백 */}
-                        <div className="bg-background rounded-xl border border-indigo-100 p-6">
-                          <h4 className="font-bold text-lg text-indigo-900 mb-5 flex items-center gap-2">
-                            <span className="w-8 h-8 bg-indigo-500 text-white rounded-lg flex items-center justify-center text-sm">
-                              AI
-                            </span>
-                            선생님의 피드백
-                          </h4>
-
-                          <div className="space-y-4">
-                            {/* 좋은 점 */}
-                            <div className="bg-white rounded-lg p-4 border border-emerald-200">
-                              <h5 className="font-semibold text-emerald-700 mb-3 flex items-center gap-2">
-                                <span className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center">
-                                  <Emo n="Sparkles" />
-                                </span>
-                                잘한 점
-                              </h5>
-                              <ul className="space-y-2">
-                                {feedback.strengths?.map((strength, idx) => (
-                                  <li
-                                    key={idx}
-                                    className="flex items-start gap-2 text-sm text-gray-700"
-                                  >
-                                    <span className="text-emerald-500 mt-0.5">
-                                      •
-                                    </span>
-                                    {strength}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-
-                            {/* 개선 포인트 */}
-                            <div className="bg-white rounded-lg p-4 border border-orange-200">
-                              <h5 className="font-semibold text-orange-700 mb-3 flex items-center gap-2">
-                                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
-                                  <Emo n="Target" />
-                                </span>
-                                이렇게 하면 더 좋아요
-                              </h5>
-                              <ul className="space-y-2">
-                                {feedback.improvements?.map(
-                                  (improvement, idx) => (
-                                    <li
-                                      key={idx}
-                                      className="flex items-start gap-2 text-sm text-gray-700"
-                                    >
-                                      <span className="text-orange-500 mt-0.5">
-                                        •
-                                      </span>
-                                      {improvement}
-                                    </li>
-                                  ),
-                                )}
-                              </ul>
-                            </div>
-
-                            {/* 상세 문장 피드백 (새로 추가) */}
-                            {feedback.detailedFeedback &&
-                              feedback.detailedFeedback.length > 0 && (
-                                <div className="bg-white rounded-lg p-4 border border-purple-200">
-                                  <h5 className="font-semibold text-purple-700 mb-3 flex items-center gap-2">
-                                    <span className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
-                                      <Emo n="PenLine" />
-                                    </span>
-                                    문장별 수정 제안
-                                  </h5>
-                                  <div className="space-y-4">
-                                    {feedback.detailedFeedback.map(
-                                      (item, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="bg-purple-50/50 rounded-lg p-3 border border-purple-100"
-                                        >
-                                          <div className="flex items-start gap-2 mb-2">
-                                            <span
-                                              className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                                item.type === "grammar"
-                                                  ? "bg-blue-100 text-blue-700"
-                                                  : item.type === "vocabulary"
-                                                    ? "bg-pink-100 text-pink-700"
-                                                    : item.type === "structure"
-                                                      ? "bg-amber-100 text-amber-700"
-                                                      : "bg-purple-100 text-purple-700"
-                                              }`}
-                                            >
-                                              {item.type === "grammar"
-                                                ? "문법"
-                                                : item.type === "vocabulary"
-                                                  ? "어휘"
-                                                  : item.type === "structure"
-                                                    ? "구성"
-                                                    : "표현"}
-                                            </span>
-                                          </div>
-                                          <div className="space-y-2 text-sm">
-                                            <div className="flex items-start gap-2">
-                                              <span className="text-red-500 font-medium whitespace-nowrap">
-                                                원문:
-                                              </span>
-                                              <span className="text-gray-600 line-through">
-                                                {item.original}
-                                              </span>
-                                            </div>
-                                            <div className="flex items-start gap-2">
-                                              <span className="text-emerald-600 font-medium whitespace-nowrap">
-                                                수정:
-                                              </span>
-                                              <span className="text-gray-800 font-medium">
-                                                {item.suggestion}
-                                              </span>
-                                            </div>
-                                            <div className="text-xs text-gray-500 mt-1 pl-1">
-                                              <Emo n="Lightbulb" /> {item.reason}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ),
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-purple-600 mt-3 flex items-center gap-1">
-                                    <span><Emo n="AlertTriangle" /></span>
-                                    수정 제안을 그대로 복사하면 AI 감지에 걸릴
-                                    수 있어요. 참고만 하세요!
-                                  </p>
-                                </div>
-                              )}
-
-                            {/* 글쓰기 팁 */}
-                            {feedback.writingTips &&
-                              feedback.writingTips.length > 0 && (
-                                <div className="bg-white rounded-lg p-4 border border-cyan-200">
-                                  <h5 className="font-semibold text-cyan-700 mb-3 flex items-center gap-2">
-                                    <span className="w-6 h-6 bg-cyan-100 rounded-full flex items-center justify-center">
-                                      <Emo n="PenLine" />
-                                    </span>
-                                    글쓰기 팁
-                                  </h5>
-                                  <ul className="space-y-2">
-                                    {feedback.writingTips.map((tip, idx) => (
-                                      <li
-                                        key={idx}
-                                        className="flex items-start gap-2 text-sm text-gray-700"
-                                      >
-                                        <span className="text-cyan-500 mt-0.5">
-                                          <Emo n="Lightbulb" />
-                                        </span>
-                                        {tip}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                            {/* 종합 의견 */}
-                            <div className="bg-white rounded-lg p-4 border border-indigo-200">
-                              <h5 className="font-semibold text-indigo-700 mb-3 flex items-center gap-2">
-                                <span className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
-                                  <Emo n="MessageCircle" />
-                                </span>
-                                종합 의견
-                              </h5>
-                              <p className="text-sm text-gray-700 leading-relaxed">
-                                {feedback.overallFeedback}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
+                        {/* 첨삭(2026-11-20 업그레이드) — AI 확률 판정은 없앴다 */}
+                        <FeedbackView feedback={feedback} writing={submittedWriting} />
 
                         {/* 버튼 */}
                         <div className="flex flex-wrap gap-3">
@@ -4008,6 +3654,9 @@ export default function StudentDashboard({ user, userData }) {
                                     detailedFeedback:
                                       feedback.detailedFeedback || [],
                                     improvements: feedback.improvements || [],
+                                    nextSteps: feedback.nextSteps || [],
+                                    spelling: feedback.spelling || [],
+                                    criteria: feedback.criteria || null,
                                     score: feedback.score,
                                     minScore: requiredScore,
                                     originalContent: submittedWriting.content, // 원본 내용 저장 (고쳐쓰기 검증용)
@@ -4078,6 +3727,9 @@ export default function StudentDashboard({ user, userData }) {
                                   detailedFeedback:
                                     feedback.detailedFeedback || [],
                                   improvements: feedback.improvements || [],
+                                  nextSteps: feedback.nextSteps || [],
+                                  spelling: feedback.spelling || [],
+                                  criteria: feedback.criteria || null,
                                   score: feedback.score,
                                   minScore: requiredScore,
                                   originalContent: submittedWriting.content, // 원본 내용 저장 (고쳐쓰기 검증용)
@@ -4424,38 +4076,17 @@ export default function StudentDashboard({ user, userData }) {
                                 </span>
                               </div>
                             )}
-                            {detail.aiUsageCheck && (
-                              <div
-                                className={`p-3 rounded-xl text-sm ${
-                                  detail.aiUsageCheck.verdict === "HIGH"
-                                    ? "bg-red-50 border border-red-200"
-                                    : detail.aiUsageCheck.verdict === "MEDIUM"
-                                      ? "bg-amber-50 border border-amber-200"
-                                      : "bg-emerald-50 border border-emerald-200"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium text-xs">
-                                    <Emo n="Bot" /> AI 활용 분석
-                                  </span>
-                                  <span
-                                    className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                                      detail.aiUsageCheck.verdict === "HIGH"
-                                        ? "bg-red-200 text-red-800"
-                                        : detail.aiUsageCheck.verdict ===
-                                            "MEDIUM"
-                                          ? "bg-amber-200 text-amber-800"
-                                          : "bg-emerald-200 text-emerald-800"
-                                    }`}
-                                  >
-                                    {detail.aiUsageCheck.aiProbability}%
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                            <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded-xl">
-                              <Emo n="MessageCircle" /> {detail.analysis.overallFeedback}
-                            </p>
+                            {/* 지난 글 첨삭 + 선생님 한마디(2026-11-20) — AI 확률 판정은 없앴다 */}
+                            <FeedbackView
+                              feedback={{
+                                ...detail.analysis,
+                                score: writing.score,
+                                teacherComment: detail.teacherComment,
+                                teacherScore: detail.teacherScore,
+                                teacherName: detail.teacherName,
+                              }}
+                              writing={{ content: detail.content }}
+                            />
                           </div>
                         )}
                       </>
@@ -4820,9 +4451,9 @@ export default function StudentDashboard({ user, userData }) {
                             )}
                           </p>
                           <p className="text-xs text-gray-500">
-                            제출 {student.submissionCount}회 · 평균{" "}
-                            {student.averageScore}점 · 통과 {student.passCount}
-                            회
+                            글 {student.submissionCount}편 · 고쳐쓰기{" "}
+                            {student.rewriteCount || 0}번 · 나아진 점수 +
+                            {student.growthSum || 0}
                           </p>
                         </div>
 
@@ -4831,9 +4462,9 @@ export default function StudentDashboard({ user, userData }) {
                           <p
                             className={`text-lg font-bold ${isMe ? "text-blue-600" : "text-gray-700"}`}
                           >
-                            {student.rankingScore}점
+                            {student.rankingScore}
                           </p>
-                          <p className="text-xs text-gray-500">랭킹점수</p>
+                          <p className="text-xs text-gray-500">노력 점수</p>
                         </div>
                       </div>
                     );

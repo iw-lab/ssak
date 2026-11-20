@@ -36,6 +36,9 @@ await adb.doc("schedulers/A1").set({ enabled: true });
 await adb.doc("retiredClassCodes/OLD111").set({ retiredAt: "2026-03-01" });
 await adb.doc("schedulers/B1").set({ enabled: true });
 await adb.doc("usage/usage_x_2026-11-18").set({ count: 3 });
+await adb.doc("analyses/okA").set({ uid: sA, score: 77, len: 1 });
+await adb.doc("analyses/okB").set({ uid: sB, score: 99 });
+await adb.doc("analysisCache/k1").set({ result: { score: 77 } });
 await adb.doc("pinAuth/A1_01").set({ uid: sA, classCode: "A1", number: 1, salt: "s", hash: "h", fails: 0 });
 await adb.doc("writings/wNull").set({ studentId: sB, classCode: null, content: "옛 글", isDraft: false });
 await adb.doc("writings/wA1").set({ studentId: sA, classCode: "A1", content: "내 글", topic: "일기", isDraft: false, createdAt: "2026-11-18" });
@@ -66,6 +69,7 @@ await client(async (auth, db) => {
 // 1-2) 낯선 사람이 «B반 학생»이라고 스스로 적고 명단 읽기
 await client(async (auth, db) => {
   const c = await createUserWithEmailAndPassword(auth, "fake@x.kr", "secret123");
+  await attack("자가 가입 때 시험용 학생(isTestStudent)으로 — 점수 서명 우회", () => setDoc(doc(db, `users/${c.user.uid}`), { uid: c.user.uid, email: "fake@x.kr", role: "student", approved: true, isTestStudent: true }));
   await attack("자가 가입 때 classCode 를 적어 남의 반 학생 행세", () => setDoc(doc(db, `users/${c.user.uid}`), { uid: c.user.uid, email: "fake@x.kr", role: "student", approved: true, classCode: "B1" }));
   await legit("반 없는 학생 가입(옛 경로)", () => setDoc(doc(db, `users/${c.user.uid}`), { uid: c.user.uid, email: "fake@x.kr", role: "student", approved: true }));
   await attack("가입 뒤 스스로 classCode 를 B1 로 바꾸기", () => updateDoc(doc(db, `users/${c.user.uid}`), { classCode: "B1" }));
@@ -119,6 +123,10 @@ await client(async (auth, db) => {
   await attack("담임: 은퇴 코드 목록 읽기", () => getDoc(doc(db, "retiredClassCodes/OLD111")));
   await attack("담임: 사용량 기록 읽기", () => getDoc(doc(db, "usage/usage_x_2026-11-18")));
   await attack("담임: 자기번호 해시 읽기", () => getDoc(doc(db, "pinAuth/A1_01")));
+  await legit("담임: 자기 반 글에 한마디·점수 고치기", () => updateDoc(doc(db, "writings/wA2"), { teacherComment: "끝맺음이 좋아요", teacherScore: 85, teacherCheckedAt: "2026-11-20", teacherName: "선생님" }));
+  await attack("담임: 점수 150", () => updateDoc(doc(db, "writings/wA2"), { teacherScore: 150 }));
+  await attack("담임: AI 점수 칸 직접 바꾸기", () => updateDoc(doc(db, "writings/wA2"), { score: 100 }));
+  await attack("담임: 다른 반 글에 한마디", () => updateDoc(doc(db, "writings/wB"), { teacherComment: "x" }));
   await attack("담임: 자기번호 직접 바꾸기", () => setDoc(doc(db, "pinAuth/A1_01"), { uid: sA, classCode: "A1", number: 1, salt: "s", hash: "x", fails: 0 }));
 });
 // 4) 학생이 친구·다른 반 것을 읽거나 고치기
@@ -138,9 +146,22 @@ await client(async (auth, db) => {
   await legit("학생: 자기 반 과제에 제출 기록", () => updateDoc(doc(db, "assignments/aA"), { submissions: [{ studentId: sA2, nickname: "학생002", score: 80 }, { studentId: "old1", nickname: "학생003", score: 85 }, { studentId: sA, nickname: "학생001", score: 75 }] }));
   await attack("학생: 다른 반 과제 제출 명단 지우기", () => updateDoc(doc(db, "assignments/aB"), { submissions: [] }));
   await legit("학생: 자기 반 코드로 글 쓰기", () => setDoc(doc(db, "writings/wS1"), { studentId: sA, classCode: "A1", content: "새 글", isDraft: false }));
+  await attack("학생: 서명 없이 점수 100 쓰기", () => setDoc(doc(db, "writings/wS2"), { studentId: sA, classCode: "A1", content: "x", isDraft: false, score: 100 }));
+  await attack("학생: 남의 첨삭 서명으로 점수 쓰기", () => setDoc(doc(db, "writings/wS3"), { studentId: sA, classCode: "A1", content: "x", isDraft: false, score: 99, analysisId: "okB" }));
+  await attack("학생: 서명과 다른 점수", () => setDoc(doc(db, "writings/wS4"), { studentId: sA, classCode: "A1", content: "x", isDraft: false, score: 95, analysisId: "okA" }));
+  await attack("학생: 좋은 서명을 다른(길이가 다른) 글에 붙이기", () => setDoc(doc(db, "writings/wS6"), { studentId: sA, classCode: "A1", content: "다른 글을 길게 썼다", isDraft: false, score: 77, analysisId: "okA" }));
+  await legit("학생: 서명된 점수로 제출", () => setDoc(doc(db, "writings/wS5"), { studentId: sA, classCode: "A1", content: "x", isDraft: false, score: 77, analysisId: "okA" }));
+  await attack("학생: 낸 글 점수를 100으로 고치기", () => updateDoc(doc(db, "writings/wS5"), { score: 100 }));
+  await legit("학생: 낸 글의 다른 칸 고치기(점수·글 그대로)", () => updateDoc(doc(db, "writings/wS5"), { lastSavedAt: "2026-11-20" }));
+  await attack("학생: 점수는 두고 글만 바꿔치기", () => updateDoc(doc(db, "writings/wS5"), { content: "남이 쓴 좋은 글을 통째로" }));
+  await attack("학생: 선생님 한마디 스스로 쓰기", () => updateDoc(doc(db, "writings/wS5"), { teacherComment: "참 잘했어요", teacherScore: 100 }));
+  await attack("학생: 첨삭 서명 읽기", () => getDoc(doc(db, "analyses/okA")));
+  await attack("학생: 내 글을 «선생님 확인됨»으로", () => updateDoc(doc(db, "writings/wS5"), { reviewed: true, reviewedAt: "x" }));
+  await attack("학생: 반 랭킹 직접 고치기", () => updateDoc(doc(db, "classes/A1"), { weeklyRanking: { periodKey: "x", formula: "effort1", data: [{ studentId: sA, rankingScore: 9999 }] } }));
+  await attack("학생: 같은 글 기록 읽기", () => getDoc(doc(db, "analysisCache/k1")));
   await attack("학생: 다른 반 코드로 글 끼워 넣기", () => setDoc(doc(db, "writings/wS2"), { studentId: sA, classCode: "B1", content: "x" }));
   await attack("학생: 내 글을 친구 글로 바꾸기(studentId)", () => updateDoc(doc(db, "writings/wS1"), { studentId: sA2 }));
-  await legit("학생: 자기 반 랭킹 갱신", () => updateDoc(doc(db, "classes/A1"), { weeklyRanking: { data: [] }, rankingUpdatedAt: "x" }));
+  await attack("학생: 자기 반 랭킹 비우기(이제 서버만 쓴다)", () => updateDoc(doc(db, "classes/A1"), { weeklyRanking: { data: [] }, rankingUpdatedAt: "x" }));
   await attack("학생: 다른 반 랭킹 조작", () => updateDoc(doc(db, "classes/B1"), { weeklyRanking: { data: [] } }));
   await attack("학생: 친구 정보 읽기", () => getDoc(doc(db, `users/${sA2}`)));
 });

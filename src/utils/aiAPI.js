@@ -11,6 +11,7 @@ export async function analyzeWriting(
   previousScore = null,
   previousText = null,
   maskWords = [],
+  options = {}, // { genre, goal, focus } — 장르(2-A)·이번 글 목표(2-D)·과제 중점(2-J)
 ) {
   try {
     const analyzeWritingFn = httpsCallable(functions, "analyzeWriting");
@@ -24,6 +25,9 @@ export async function analyzeWriting(
       previousScore,
       previousText,
       maskWords,
+      genre: options.genre || null,
+      goal: options.goal || null,
+      focus: Array.isArray(options.focus) ? options.focus : [],
     });
     return result.data;
   } catch (error) {

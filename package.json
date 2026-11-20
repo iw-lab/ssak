@@ -13,7 +13,8 @@
     "test:accounts": "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21} firebase emulators:exec --only auth,firestore,functions --project isw-writing 'node scripts/test-student-accounts.mjs'",
     "test:ai-guard": "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21} firebase emulators:exec --only auth,firestore,functions --project isw-writing 'node scripts/test-ai-guard.mjs'",
     "test:pin": "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21} firebase emulators:exec --only auth,firestore,functions --project isw-writing 'node scripts/test-pin-login.mjs'",
-    "predeploy:check": "npm run check && npm run test:rules && npm run test:accounts && npm run test:ai-guard && npm run test:pin"
+    "test:feedback": "node functions/test-feedback.mjs && node scripts/test-effort-ranking.mjs && JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21} firebase emulators:exec --only auth,firestore,functions --project isw-writing 'node scripts/test-feedback-flow.mjs'",
+    "predeploy:check": "npm run check && npm run test:rules && npm run test:accounts && npm run test:ai-guard && npm run test:pin && npm run test:feedback"
   },
   "dependencies": {
     "autoprefixer": "^10.4.16",

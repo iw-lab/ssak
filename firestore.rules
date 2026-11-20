@@ -66,7 +66,8 @@ service cloud.firestore {
                        ((request.auth.uid == userId &&
                          request.resource.data.uid == userId &&
                          // 학생 반 배정은 선생님(일괄 생성 함수)만 — 스스로 «B반 학생»이라 적고 명단을 읽지 못하게
-                         ((request.resource.data.role == 'student' && request.resource.data.get('classCode', null) == null) ||
+                         ((request.resource.data.role == 'student' && request.resource.data.get('classCode', null) == null &&
+                           request.resource.data.get('isTestStudent', false) == false) ||
                           (request.resource.data.role == 'teacher' && request.resource.data.get('approved', false) == false))) ||
                         (request.resource.data.role == 'student' &&
                          isApprovedTeacherOfClass(request.resource.data.get('classCode', null))));
@@ -106,14 +107,12 @@ service cloud.firestore {
                        request.resource.data.students.size() == 0 &&
                        request.resource.data.maxStudents == 40;
 
-      // Only the teacher who owns the class or super admin can update
-      // Students can only modify the students array (joining/leaving class)
+      // 담임·슈퍼관리자만. 랭킹은 서버 트리거(onWritingSubmitted)가 쓴다 — 예전엔 반 학생 누구나 랭킹을 직접 고칠 수 있었다(2026-11-20)
       allow update: if isAuthenticated() &&
                        ((resource.data.teacherId == request.auth.uid && isApprovedTeacher() &&
-                         request.resource.data.teacherId == resource.data.teacherId) ||
-                        isSuperAdmin() ||
-                        (isStudentOfClass(classCode) &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weeklyRanking', 'monthlyRanking', 'rankingUpdatedAt'])));
+                         request.resource.data.teacherId == resource.data.teacherId &&
+                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['weeklyRanking', 'monthlyRanking'])) ||
+                        isSuperAdmin());
 
       // 반 삭제는 학생·글까지 함께 지우는 서버 함수(deleteClassWithStudents)로만 — 문서만 지우면 옛 글이 남는다
       allow delete: if isSuperAdmin();
@@ -125,6 +124,28 @@ service cloud.firestore {
     }
 
     // Writings collection
+    // 점수 서명: 점수가 없으면(임시 저장) 통과, 시험용 학생은 통과, 그 밖엔 analyses/{analysisId} 가 내 것이고 점수가 같아야
+    function scoreIsSigned() {
+      let d = request.resource.data;
+      return !('score' in d) ||
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isTestStudent', false) == true ||
+             (d.get('analysisId', '') is string && d.get('analysisId', '') != '' &&
+              exists(/databases/$(database)/documents/analyses/$(d.analysisId)) &&
+              get(/databases/$(database)/documents/analyses/$(d.analysisId)).data.uid == request.auth.uid &&
+              get(/databases/$(database)/documents/analyses/$(d.analysisId)).data.score == d.score &&
+              d.get('content', '') is string &&
+              get(/databases/$(database)/documents/analyses/$(d.analysisId)).data.get('len', -1) == d.get('content', '').size());
+    }
+    function noTeacherFields() {
+      return !request.resource.data.keys().hasAny(['teacherComment', 'teacherScore', 'teacherCheckedAt', 'teacherName', 'reviewed', 'reviewedAt']);
+    }
+    function teacherFieldsValid() {
+      let d = request.resource.data;
+      return (!('teacherComment' in d) || d.teacherComment == null || (d.teacherComment is string && d.teacherComment.size() <= 500)) &&
+             (!('teacherScore' in d) || d.teacherScore == null || (d.teacherScore is int && d.teacherScore >= 0 && d.teacherScore <= 100)) &&
+             (!('teacherName' in d) || d.teacherName == null || (d.teacherName is string && d.teacherName.size() <= 20));
+    }
+
     match /writings/{writingId} {
       // Students can read their own writings, super admins can read all
       // Approved teachers can read any writings (cross-doc get() breaks list queries)
@@ -137,17 +158,23 @@ service cloud.firestore {
 
       // Only students can create writings (for themselves)
       // 자기 반 코드로만 쓴다(남의 반 담임 목록에 끼워 넣기 금지)
+      // 점수는 서버가 서명한 첨삭(analyses/{analysisId})과 같아야 한다(2026-11-20 — 예전엔 브라우저가 아무 점수나 썼다)
       allow create: if isStudent() &&
                        request.resource.data.studentId == request.auth.uid &&
-                       request.resource.data.get('classCode', null) == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('classCode', null);
+                       request.resource.data.get('classCode', null) == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('classCode', null) &&
+                       scoreIsSigned() && noTeacherFields();
 
-      // Student who wrote it can update, OR
-      // Approved teacher can update only reviewed/reviewedAt fields
+      // 학생: 자기 글(점수는 서명된 것만, 선생님 칸은 못 건드림) / 담임: 확인·한마디·점수 고치기 칸만
       allow update: if (isStudent() && resource.data.studentId == request.auth.uid &&
                         request.resource.data.studentId == resource.data.studentId &&
-                        request.resource.data.get('classCode', null) == resource.data.get('classCode', null)) ||
+                        request.resource.data.get('classCode', null) == resource.data.get('classCode', null) &&
+                        // 점수·글이 그대로면 통과, 하나라도 바뀌면 서명이 새 글과 맞아야(점수는 두고 글만 바꿔치기 금지)
+                        ((request.resource.data.get('score', null) == resource.data.get('score', null) &&
+                          request.resource.data.get('content', null) == resource.data.get('content', null)) || scoreIsSigned()) &&
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['teacherComment', 'teacherScore', 'teacherCheckedAt', 'teacherName', 'reviewed', 'reviewedAt'])) ||
                        (isApprovedTeacherOfClass(resource.data.classCode) &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewed', 'reviewedAt']));
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewed', 'reviewedAt', 'teacherComment', 'teacherScore', 'teacherCheckedAt', 'teacherName']) &&
+                        teacherFieldsValid());
 
       // Student can delete their own writing
       // Teacher can only delete writings from their own class (cross-class restriction)
@@ -326,6 +353,14 @@ service cloud.firestore {
     match /ssakdb_meta/{docId} {
       allow read: if isAuthenticated();
       allow write: if isSuperAdmin();
+    }
+
+    // 첨삭 서명·같은 글 기록 — 함수만 다룬다(학생이 점수를 위조하거나 남의 첨삭을 읽지 못하게)
+    match /analyses/{docId} {
+      allow read, write: if false;
+    }
+    match /analysisCache/{docId} {
+      allow read, write: if false;
     }
 
     // 자기번호 해시·틀린 횟수 — 함수(pinLogin·issueStudentPins)만 다룬다. 관리자도 못 읽는다

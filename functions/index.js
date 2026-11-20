@@ -1424,49 +1424,51 @@ function checkWritingQuality(text, idealWordCount = 100) {
   return { isInvalid: false };
 }
 
-// 🚀 프롬프트 캐시 - 동일 글 재분석 방지 (API 비용 절감)
-const analysisCache = new Map();
-const ANALYSIS_CACHE_TTL = 3600000; // 1시간
+// 🌱 첨삭 엔진(functions/feedback.js) — 2026-11-20 업그레이드: 고친 문장 대신 «여기·왜·힌트», 고칠 것 1~2개,
+//   점수마다 글 속 근거, 고쳐쓰기 덤 없음, 장르·목표·과제 중점. AI 확률 판정은 없앴다(쓰는 과정 기록으로 대체).
+const FB = require("./feedback.js");
+const { createHash, randomUUID } = require("crypto");
+const ANALYSIS_CACHE_DAYS = 90;
+// 학년별 권장 글자 수(공백 뺀 글자) — 화면 src/config/wordCount.js 의 normalizeGradeLevel→ideal 과 같은 값
+const IDEAL_WORDS = { elementary_1_2: 150, elementary_3_4: 350, elementary_5_6: 600, middle: 800, high: 1200, default: 350 };
 
-function getAnalysisCacheKey(text, topic, gradeLevel) {
-  // 글 내용의 해시값 생성 (간단한 해시)
-  const hash = text.slice(0, 100) + text.length + topic + gradeLevel;
-  return hash;
+// 같은 글 = 같은 점수(1-6): 글·주제·학년·장르·목표·중점이 같으면 서버 기록(analysisCache)의 결과를 그대로 준다.
+//   예전 메모리 캐시는 인스턴스마다 따로라 같은 글을 다시 내면 점수가 달라졌다(국내 교사 불만 1위 «같은 답안 다른 점수»).
+function analysisKey(o) {
+  return createHash("sha256").update(JSON.stringify([FB.PROMPT_VERSION, o.gradeLevel, o.topic, o.genre, o.goal, o.focus, o.wordCount, o.idealWordCount, o.text])).digest("hex");
 }
 
-// Analyze writing using OpenAI - 🚀 최적화: 토큰 50% 절감 + 캐싱 + 사용량 제한
+// 제출 점수 서명(1-9): 결과를 서버 전용 analyses/{id} 에 남기고 id 를 돌려준다.
+//   writings 규칙이 «score == analyses/{id}.score 이고 내 것»일 때만 받는다 — 예전엔 브라우저가 점수를 아무 값으로 써도 됐다.
+//   서명은 글 길이(가리기 전 원문 글자 수)에도 묶는다 — 규칙은 해시를 못 하니, 좋은 점수 서명을 다른 글에 붙이는 걸 길이로 막는다.
+async function signAnalysis(uid, result, len) {
+  const id = randomUUID();
+  await db.doc(`analyses/${id}`).set({ uid, score: result.score, len, createdAt: new Date().toISOString() });
+  return id;
+}
+
 exports.analyzeWriting = onCall(
   { secrets: [anthropicApiKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
     }
-
     const userId = request.auth.uid;
-    const data = request.data;
-    let {
-      text,
-      gradeLevel,
-      topic,
-      wordCount,
-      idealWordCount,
-      isRewrite,
-      previousScore,
-      previousText,
-      schoolId,
-    } = data || {};
+    const data = request.data || {};
+    let { text, gradeLevel, topic, wordCount, idealWordCount, isRewrite, previousScore, previousText, schoolId } = data;
+    const genre = FB.GENRES[data.genre] ? data.genre : null;
+    const goal = FB.GOALS[data.goal] ? data.goal : null;
+    const focus = Array.isArray(data.focus) ? data.focus.filter((k) => FB.CRITERION_KEYS.includes(k)).slice(0, 3) : [];
+    // 글자 수·권장 글자 수는 서버가 정한다 — 클라가 보낸 값을 믿으면 짧은 글로 감점을 피한 점수가 서명된다(8way 4계열)
+    wordCount = typeof text === "string" ? text.replace(/\s/g, "").length : 0;
+    idealWordCount = IDEAL_WORDS[gradeLevel] || IDEAL_WORDS.default;
+
     // 🔒 국외 AI 로 가기 전 개인정보 가림(이름·주소·학교·전화 → ㅇㅇㅇ) — 학생이 미리보기에서 더 가린 낱말(maskWords) 포함
-    const maskWords = Array.isArray(data?.maskWords) ? data.maskWords : [];
+    const maskWords = Array.isArray(data.maskWords) ? data.maskWords : [];
+    const originalLen = typeof text === "string" ? text.length : 0; // 서명에 묶을 원문 길이(가리기 전)
     if (text != null) text = (await maskForAI(text, maskWords)).text;
     if (previousText != null) previousText = (await maskForAI(previousText, maskWords)).text;
-    if (topic != null) topic = (await maskForAI(topic, data?.maskWords)).text;
-
-    if (isRewrite) {
-      console.log(
-        `[고쳐쓰기] 주제: "${topic}", 이전점수: ${previousScore}, 이전글길이: ${previousText?.length || 0}자`,
-      );
-    }
-
+    if (topic != null) topic = (await maskForAI(topic, maskWords)).text;
     if (!text || !topic) {
       throw new HttpsError("invalid-argument", "텍스트와 주제가 필요합니다.");
     }
@@ -1474,558 +1476,125 @@ exports.analyzeWriting = onCall(
     // 🚀 서버 측 무의미한 글 감지 (AI 호출 전 차단 = API 비용 0원)
     const qualityCheck = checkWritingQuality(text, idealWordCount);
     if (qualityCheck.isInvalid) {
-      console.log(`[무의미한 글] ${qualityCheck.reason} - API 호출 차단`);
-      return {
-        score: 0,
-        contentScore: 0,
-        topicRelevanceScore: 0,
-        structureScore: 0,
-        vocabularyScore: 0,
-        grammarScore: 0,
-        creativityScore: 0,
-        feedback: qualityCheck.feedback,
-        strengths: [],
-        improvements: [qualityCheck.improvement],
-        overallFeedback: qualityCheck.feedback,
-        writingTips: ["주제에 맞는 의미있는 내용을 작성해보세요."],
-        detailedFeedback: [],
-        qualityPenalty: qualityCheck.reason,
-      };
+      const zero = FB.normalizeAnalysis({ overall: qualityCheck.feedback, nextSteps: [{ focus: "content", why: qualityCheck.improvement, hint: "주제에 대해 무엇을 말하고 싶은지 한 문장으로 먼저 써 볼까요?" }] }, text, { goal, focus });
+      zero.qualityPenalty = qualityCheck.reason;
+      zero.analysisId = await signAnalysis(userId, zero, originalLen);
+      return zero;
     }
 
-    // 🚀 분석 캐시 확인 (동일 글 재분석 방지)
-    const cacheKey = getAnalysisCacheKey(text, topic, gradeLevel);
-    const cached = analysisCache.get(cacheKey);
-    if (
-      cached &&
-      !isRewrite &&
-      Date.now() - cached.timestamp < ANALYSIS_CACHE_TTL
-    ) {
-      console.log(`[캐시 히트] 분석 결과 재사용 - API 비용 절감`);
-      return cached.data;
+    const prev = previousScore === null || previousScore === undefined || previousScore === "" ? null : Number(previousScore);
+    const finish = async (result) => {
+      if (isRewrite && Number.isFinite(prev)) {
+        result.isRewrite = true;
+        result.previousScore = prev;
+        result.scoreDiff = result.score - prev;
+        if (previousText && previousText.trim() === text.trim()) result.growthNote = "앞 글과 달라진 곳이 없어요. «이번에 고칠 것»을 하나 골라 고쳐 보세요.";
+      }
+      result.analysisId = await signAnalysis(userId, result, originalLen);
+      return result;
+    };
+
+    // 같은 글이면 서버 기록의 결과 그대로(AI 0원·점수 같음)
+    const key = analysisKey({ gradeLevel, topic, genre, goal, focus, wordCount, idealWordCount, text });
+    const cacheRef = db.doc(`analysisCache/${key}`);
+    try {
+      const hit = await cacheRef.get();
+      if (hit.exists && Date.now() - Date.parse(hit.data().createdAt || 0) < ANALYSIS_CACHE_DAYS * 864e5) {
+        console.log("[같은 글] 서버 기록 결과 재사용");
+        return finish({ ...hit.data().result, cached: true });
+      }
+    } catch (e) {
+      console.warn("[같은 글 기록 읽기 실패]", e.message);
     }
 
-    // 💰 AI 문지기 — 무의미한 글·캐시 답(AI 0원)은 세지 않고, AI 를 부르기 직전에만 센다
+    // 💰 AI 문지기 — 무의미한 글·같은 글(AI 0원)은 세지 않고, AI 를 부르기 직전에만 센다
     await guardAI(request);
 
+    const gradeNames = { elementary_1_2: "초1-2", elementary_3_4: "초3-4", elementary_5_6: "초5-6", middle: "중등", high: "고등" };
+    const grade = gradeNames[gradeLevel] || gradeLevel;
+
+    // 🌱 싹DB에서 루브릭과 우수작 예시 검색
+    let ssakContext = "";
     try {
-      const gradeNames = {
-        elementary_1_2: "초1-2",
-        elementary_3_4: "초3-4",
-        elementary_5_6: "초5-6",
-        middle: "중등",
-        high: "고등",
-      };
-      const grade = gradeNames[gradeLevel] || gradeLevel;
+      const [rubric, example] = await Promise.all([getSsakRubric(gradeLevel, topic), getSsakExample(gradeLevel, topic, "high")]);
+      ssakContext = buildSsakPromptContext(rubric, example);
+    } catch (ssakError) {
+      console.warn("[싹DB] 컨텍스트 로드 실패 (기본 평가 사용):", ssakError.message);
+    }
 
-      // 🌱 싹DB에서 루브릭과 우수작 예시 검색
-      let ssakContext = "";
+    const prompt = FB.buildAnalysisPrompt({
+      grade, topic, text, wordCount, idealWordCount, genre: genre || null, goal, focus, ssakContext,
+      previousText: isRewrite ? previousText : null,
+    });
+
+    // 재시도 3번 — 그래도 못 받으면 «가짜 점수»를 주지 않고 다시 내라고 한다(예전엔 68~70점을 지어 줬다)
+    let parsed = null;
+    let responseText = "";
+    for (let attempt = 1; attempt <= 3 && !parsed; attempt++) {
       try {
-        const [rubric, example] = await Promise.all([
-          getSsakRubric(gradeLevel, topic),
-          getSsakExample(gradeLevel, topic, "high"),
-        ]);
-        ssakContext = buildSsakPromptContext(rubric, example);
-        if (ssakContext) {
-          console.log(`[싹DB] 컨텍스트 로드 성공 (${ssakContext.length}자)`);
-        }
-      } catch (ssakError) {
-        console.warn(
-          "[싹DB] 컨텍스트 로드 실패 (기본 평가 사용):",
-          ssakError.message,
-        );
-      }
-
-      // 🚀 고쳐쓰기 모드 - 간소화된 프롬프트 (AI 파싱 안정성 향상)
-      let rewriteInfo = "";
-      if (isRewrite && previousScore !== null) {
-        if (previousText) {
-          // 이전 글과 비교 (간소화)
-          const prevTextShort = previousText.substring(0, 400);
-          rewriteInfo = `\n[고쳐쓰기] 이전:${previousScore}점 "${prevTextShort}..." → 개선점 찾아 +3~5점. growthNote필수`;
-        } else {
-          rewriteInfo = `\n[고쳐쓰기] 이전:${previousScore}점 → 노력인정 +3~5점. growthNote에 칭찬`;
-        }
-      }
-
-      // 🚀 6+1 Trait Writing 기반 공정 평가 + 싹DB 루브릭
-      // 참고: EssayGrader, CoGrader, Grammarly, ProWritingAid, Hemingway, Turnitin
-      const prompt = `${grade} 글쓰기 평가. 6+1 Trait Writing 기반. 격려+성장 중심.${rewriteInfo}
-${ssakContext}
-주제:"${topic}" | ${wordCount}자(권장${idealWordCount}자)
-
-글:"""${text}"""
-
-[0점조건: 반복문자, 무의미나열, 주제완전무관]
-
-📊 6가지 평가항목(모든 항목 반드시 평가!):
-1. contentScore(내용,25점): 주제이해=18, 풍부한내용=22-25
-2. topicRelevanceScore(주제,10점): 주제일치도, ≤3점시 총점0
-3. structureScore(구성,20점): 서론본론결론=14, 논리적흐름=17-20
-4. vocabularyScore(어휘,20점): 적절한표현=14, 다양한어휘=17-20
-5. grammarScore(문법,15점): 맞춤법띄어쓰기=10, 정확성=13-15
-6. creativityScore(창의성,10점): 평범한표현=4-5, 자기만의표현=6-7, 독창적=8-10
-
-목표분포: 평균72-78, 우수80-88, 탁월90+
-
-🎯 공정성원칙:
-- 성장중심: 이전보다 나아진점 칭찬
-- 구체적피드백: "더 좋게" 대신 "~하면 좋아요" 구체적 제안
-- 강점먼저: 잘한점3개 먼저, 개선점2개
-- 연령고려: ${grade} 수준에 맞는 기대치
-
-AI판단: 잘쓴글≠AI, 낮은확률(10-20%)기본
-
-⚠️6개항목모두평가필수!JSON:{"score":6개합계,"contentScore":0-25,"topicRelevanceScore":0-10,"structureScore":0-20,"vocabularyScore":0-20,"grammarScore":0-15,"creativityScore":0-10,"feedback":"칭찬","strengths":["잘한점3개"],"improvements":["개선점2개"],"overallFeedback":"종합평가","writingTips":["팁2개"],"detailedFeedback":[{"type":"spelling/grammar/style","original":"현재글원문만","suggestion":"수정제안","reason":"이유"}],"growthNote":"성장포인트","aiCheck":{"probability":0-100,"verdict":"LOW/MEDIUM/HIGH","reason":"이유"}}`;
-
-      // 🚀 안정성 강화: 최대 3회 재시도 + 지수 백오프
-      let responseText = "";
-      let lastError = null;
-      const MAX_RETRIES = 3;
-
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          responseText = await callAI(prompt, {
-            masked: true,
-            maxTokens: 4096,
-            systemPrompt: SYSTEM_PROMPTS.writingAnalyzer,
-          });
-          console.log(
-            `[AI 응답] 시도 ${attempt}/${MAX_RETRIES}, 길이: ${responseText.length}자`,
-          );
-
-          // 응답이 유효한지 사전 검증
-          if (
-            responseText &&
-            responseText.includes("{") &&
-            responseText.includes("score")
-          ) {
-            break; // 성공
-          } else if (attempt < MAX_RETRIES) {
-            console.warn(`[AI 응답 불완전] 시도 ${attempt}, 재시도...`);
-            await new Promise((r) => setTimeout(r, 1000 * attempt)); // 지수 백오프
-            continue;
-          }
-        } catch (aiError) {
-          lastError = aiError;
-          console.error(
-            `[AI 호출 오류] 시도 ${attempt}/${MAX_RETRIES}: ${aiError.message}`,
-          );
-
-          if (attempt < MAX_RETRIES) {
-            // 지수 백오프: 1초, 2초, 4초
-            await new Promise((r) =>
-              setTimeout(r, 1000 * Math.pow(2, attempt - 1)),
-            );
-          }
-        }
-      }
-
-      // 모든 재시도 실패 시 기본 응답 반환
-      if (!responseText || responseText.trim().length === 0) {
-        console.error(
-          `[AI 최종 실패] ${MAX_RETRIES}회 시도 후 실패. 에러: ${lastError?.message || "응답 없음"}`,
-        );
-        // 학년별 맞춤 기본 점수
-        const baseScore = gradeLevel?.includes("elementary_1")
-          ? 70
-          : gradeLevel?.includes("elementary")
-            ? 68
-            : 65;
-        return {
-          score: baseScore,
-          contentScore: 17,
-          topicRelevanceScore: 7,
-          structureScore: 14,
-          vocabularyScore: 14,
-          grammarScore: 9,
-          creativityScore: 7,
-          feedback: `${grade} 친구의 글을 읽었어요! 좋은 시도입니다.`,
-          strengths: [
-            "글을 끝까지 작성했어요",
-            "주제에 대해 생각해보았어요",
-            "글쓰기에 도전했어요",
-          ],
-          improvements: [
-            "생각한 내용을 더 자세히 써보세요",
-            "왜 그렇게 생각했는지 이유를 덧붙여보세요",
-          ],
-          overallFeedback:
-            "글쓰기에 도전해주셔서 좋습니다! 일시적으로 자세한 분석이 어려웠지만, 계속 글을 쓰면서 실력을 키워보세요.",
-          writingTips: [
-            "떠오르는 생각을 자유롭게 써보세요",
-            "하나의 생각을 3문장 이상으로 풀어써보세요",
-          ],
-          detailedFeedback: [],
-          growthNote: isRewrite
-            ? "다시 도전해주셔서 정말 좋아요! 포기하지 않는 모습이 멋집니다."
-            : "",
-          aiCheck: {
-            probability: 10,
-            verdict: "LOW",
-            reason: "학생 글로 판단",
-          },
-          _fallback: true, // 폴백 응답 표시
-        };
-      }
-
-      // Parse JSON from response - 더 강력한 파싱
-      let jsonMatch = responseText.match(/\{[\s\S]*\}/);
-
-      // JSON 블록이 없으면 마크다운 코드 블록 내에서 찾기
-      if (!jsonMatch) {
-        const codeBlockMatch = responseText.match(
-          /```(?:json)?\s*([\s\S]*?)```/,
-        );
-        if (codeBlockMatch) {
-          jsonMatch = codeBlockMatch[1].match(/\{[\s\S]*\}/);
-        }
-      }
-
-      if (!jsonMatch) {
-        console.error(
-          `[AI 파싱 실패] JSON 없음. 응답 길이: ${responseText.length}자`,
-        );
-
-        // 🚀 응답에서 숫자/키워드 추출 시도
-        const scoreMatch = responseText.match(/score["\s:]+(\d+)/i);
-        const extractedScore = scoreMatch ? parseInt(scoreMatch[1]) : null;
-
-        // 학년별 맞춤 기본 점수
-        const baseScore =
-          extractedScore && extractedScore > 0 && extractedScore <= 100
-            ? extractedScore
-            : gradeLevel?.includes("elementary_1")
-              ? 70
-              : 68;
-
-        return {
-          score: baseScore,
-          contentScore: 17,
-          topicRelevanceScore: 7,
-          structureScore: 14,
-          vocabularyScore: 14,
-          grammarScore: 9,
-          creativityScore: 7,
-          feedback: `${grade} 친구, 글을 잘 써주었어요!`,
-          strengths: [
-            "글쓰기에 도전했어요",
-            "주제에 대해 생각해보았어요",
-            "끝까지 완성했어요",
-          ],
-          improvements: [
-            "더 구체적인 예시를 들어보세요",
-            "자신의 생각을 더 자세히 설명해보세요",
-          ],
-          overallFeedback:
-            "좋은 글입니다! 앞으로 더 구체적인 내용을 담아 써보면 더욱 좋은 글이 될 거예요.",
-          writingTips: [
-            "왜 그렇게 생각했는지 이유를 써보세요",
-            "보고, 듣고, 느낀 것을 구체적으로 표현해보세요",
-          ],
-          detailedFeedback: [],
-          growthNote: isRewrite ? "다시 도전해주셔서 정말 좋아요!" : "",
-          aiCheck: { probability: 12, verdict: "LOW", reason: "학생 글" },
-          _fallback: true,
-        };
-      }
-
-      let parsed;
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch (parseError) {
-        // JSON 파싱 실패 시 다양한 수정 시도
-        let cleanedJson = jsonMatch[0]
-          .replace(/,\s*}/g, "}") // trailing comma 제거
-          .replace(/,\s*]/g, "]") // array trailing comma 제거
-          .replace(/[\u0000-\u001F]+/g, " ") // 제어문자 제거
-          .replace(/\n/g, "\\n") // 줄바꿈 이스케이프
-          .replace(/\t/g, "\\t") // 탭 이스케이프
-          .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // 따옴표 없는 키에 따옴표 추가
-
-        try {
-          parsed = JSON.parse(cleanedJson);
-          console.log("[AI 파싱] JSON 수정 후 파싱 성공");
-        } catch (secondError) {
-          // 🚀 마지막 시도: 더 적극적인 JSON 복구
+        responseText = await callAI(prompt, { masked: true, maxTokens: 4096, systemPrompt: SYSTEM_PROMPTS.writingAnalyzer });
+        const m = responseText.match(/\{[\s\S]*\}/);
+        if (m) {
           try {
-            // 중괄호 균형 맞추기
-            let braceCount = 0;
-            let fixedJson = "";
-            for (const char of cleanedJson) {
-              if (char === "{") braceCount++;
-              if (char === "}") braceCount--;
-              fixedJson += char;
-              if (braceCount === 0 && fixedJson.includes("{")) break;
-            }
-            while (braceCount > 0) {
-              fixedJson += "}";
-              braceCount--;
-            }
-
-            parsed = JSON.parse(fixedJson);
-            console.log("[AI 파싱] JSON 균형 수정 후 파싱 성공");
-          } catch (thirdError) {
-            console.error(
-              `[AI 파싱 최종 실패] 원본 길이: ${jsonMatch[0].length}자`,
-            );
-
-            // 부분적으로 추출 시도
-            const scoreMatch = jsonMatch[0].match(/"score"\s*:\s*(\d+)/);
-            const extractedScore = scoreMatch
-              ? Math.min(100, Math.max(0, parseInt(scoreMatch[1])))
-              : 68;
-
-            return {
-              score: extractedScore,
-              contentScore: 17,
-              topicRelevanceScore: 7,
-              structureScore: 14,
-              vocabularyScore: 14,
-              grammarScore: 9,
-              creativityScore: 7,
-              feedback: `${grade} 친구, 글을 잘 써주었어요!`,
-              strengths: [
-                "글쓰기에 열심히 도전했어요",
-                "주제에 맞게 작성했어요",
-                "끝까지 완성했어요",
-              ],
-              improvements: [
-                "더 자세한 내용을 추가해보세요",
-                "느낀 점을 더 구체적으로 써보세요",
-              ],
-              overallFeedback:
-                "좋은 글이에요! 생각을 더 자세히 풀어쓰면 더욱 멋진 글이 될 거예요.",
-              writingTips: ["하나의 문장을 두세 문장으로 늘려보세요"],
-              detailedFeedback: [],
-              growthNote: isRewrite ? "다시 도전하는 모습이 정말 멋져요!" : "",
-              aiCheck: { probability: 12, verdict: "LOW", reason: "학생 글" },
-              _fallback: true,
-            };
+            parsed = JSON.parse(m[0]);
+          } catch {
+            parsed = JSON.parse(m[0].replace(/,\s*}/g, "}").replace(/,\s*]/g, "]"));
           }
         }
+        if (!parsed || typeof parsed.scores !== "object") parsed = null;
+      } catch (e) {
+        console.warn(`[첨삭 시도 ${attempt}/3 실패] ${e.message}`);
       }
+      if (!parsed && attempt < 3) await new Promise((r) => setTimeout(r, 800 * attempt));
+    }
+    if (!parsed) {
+      throw new HttpsError("unavailable", "첨삭을 잠시 못 했어요. 조금 뒤에 다시 내 주세요.");
+    }
 
-      // 점수 유효성 검사 및 보정
-      parsed.contentScore = Math.max(0, Math.min(25, parsed.contentScore || 0));
-      parsed.topicRelevanceScore = Math.max(
-        0,
-        Math.min(10, parsed.topicRelevanceScore || 0),
-      );
-      parsed.structureScore = Math.max(
-        0,
-        Math.min(20, parsed.structureScore || 0),
-      );
-      parsed.vocabularyScore = Math.max(
-        0,
-        Math.min(20, parsed.vocabularyScore || 0),
-      );
-      parsed.grammarScore = Math.max(0, Math.min(15, parsed.grammarScore || 0));
-      parsed.creativityScore = Math.max(
-        0,
-        Math.min(10, parsed.creativityScore || 0),
-      );
+    const result = FB.normalizeAnalysis(parsed, text, { goal, focus });
+    result.genre = genre;
+    result.focus = focus;
 
-      // 🚀 detailedFeedback 필터링: original과 suggestion이 동일한 항목 제거
-      if (parsed.detailedFeedback && Array.isArray(parsed.detailedFeedback)) {
-        const normalizeText = (text) => {
-          if (!text) return "";
-          return text.replace(/[\s\.,!?'"()[\]{}:;·~\-_]/g, "").toLowerCase();
-        };
+    // 주제를 벗어난 글(주제 3점 이하)은 0점
+    if (result.topicRelevanceScore <= 3) {
+      result.score = 0;
+      result.topicPenalty = "zero";
+      result.overallFeedback = `이 글은 주제(«${topic}»)와 관련이 없어요. 주제를 다시 보고 그에 맞는 내용으로 써 보세요.`;
+      result.feedback = result.overallFeedback;
+    }
 
-        const originalCount = parsed.detailedFeedback.length;
-        parsed.detailedFeedback = parsed.detailedFeedback.filter((item) => {
-          if (!item.original || !item.suggestion) return false;
-          const normalizedOriginal = normalizeText(item.original);
-          const normalizedSuggestion = normalizeText(item.suggestion);
-          // 정규화된 텍스트가 동일하면 필터링
-          return normalizedOriginal !== normalizedSuggestion;
-        });
-
-        if (originalCount !== parsed.detailedFeedback.length) {
-          console.log(
-            `[detailedFeedback 필터링] ${originalCount}개 → ${parsed.detailedFeedback.length}개 (중복 제거: ${originalCount - parsed.detailedFeedback.length}개)`,
-          );
-        }
+    // 글자 수 감점(완화된 기준) — 예전과 같음
+    if (wordCount && idealWordCount && result.score > 0) {
+      const ratio = wordCount / idealWordCount;
+      const steps = [[0.2, 30], [0.3, 25], [0.4, 20], [0.5, 15], [0.6, 12], [0.7, 10], [0.8, 7], [0.9, 5]];
+      const pen = (steps.find(([r]) => ratio < r) || [0, 0])[1];
+      if (pen > 0) {
+        result.score = Math.max(0, result.score - pen);
+        result.wordCountPenalty = pen;
       }
+    }
 
-      // 🚀 총점 = 각 항목 점수의 합계로 강제 계산 (AI가 준 score 무시)
-      const calculatedScore =
-        parsed.contentScore +
-        parsed.topicRelevanceScore +
-        parsed.structureScore +
-        parsed.vocabularyScore +
-        parsed.grammarScore +
-        parsed.creativityScore;
-      parsed.score = calculatedScore;
-      console.log(
-        `[점수계산] 내용${parsed.contentScore}+주제${parsed.topicRelevanceScore}+구성${parsed.structureScore}+어휘${parsed.vocabularyScore}+문법${parsed.grammarScore}+창의성${parsed.creativityScore}=${calculatedScore}점`,
-      );
-
-      // 🚀 주제 일치도 3점 이하 시 0점 처리 (주제와 관련 없는 글)
-      if (parsed.topicRelevanceScore <= 3) {
-        console.log(
-          `[주제이탈 0점] 주제일치도 ${parsed.topicRelevanceScore}점 → 총점 0점 처리`,
-        );
-        parsed.score = 0;
-        parsed.topicPenalty = "zero";
-        parsed.feedback =
-          "주제와 관련 없는 내용입니다. 주제에 맞는 글을 작성해주세요.";
-        parsed.overallFeedback = `이 글은 주제("${topic}")와 관련이 없어요. 주제를 다시 확인하고, 주제에 맞는 내용으로 글을 써보세요.`;
-      }
-
-      // 🚀 글자 수 강제 감점 (완화된 기준)
-      if (wordCount && idealWordCount) {
-        const ratio = wordCount / idealWordCount;
-        let wordCountPenalty = 0;
-
-        if (ratio < 0.2) {
-          wordCountPenalty = 30; // 20% 미만: -30점
-        } else if (ratio < 0.3) {
-          wordCountPenalty = 25; // 20~29%: -25점
-        } else if (ratio < 0.4) {
-          wordCountPenalty = 20; // 30~39%: -20점
-        } else if (ratio < 0.5) {
-          wordCountPenalty = 15; // 40~49%: -15점
-        } else if (ratio < 0.6) {
-          wordCountPenalty = 12; // 50~59%: -12점
-        } else if (ratio < 0.7) {
-          wordCountPenalty = 10; // 60~69%: -10점
-        } else if (ratio < 0.8) {
-          wordCountPenalty = 7; // 70~79%: -7점
-        } else if (ratio < 0.9) {
-          wordCountPenalty = 5; // 80~89%: -5점
-        }
-        // 90% 이상: 감점 없음
-
-        if (wordCountPenalty > 0) {
-          const originalScore = parsed.score;
-          parsed.score = Math.max(0, parsed.score - wordCountPenalty);
-          parsed.wordCountPenalty = wordCountPenalty;
-          console.log(
-            `[글자수 감점] ${wordCount}자/${idealWordCount}자 (${Math.round(ratio * 100)}%) → -${wordCountPenalty}점 (${originalScore}→${parsed.score})`,
-          );
-        }
-      }
-
-      // 🚀 고쳐쓰기 모드: 노력 인정 + 성장 중심 평가
-      // previousScore가 0이어도 유효한 값이므로 !== null && !== undefined 체크
-      if (isRewrite && previousScore !== null && previousScore !== undefined) {
-        const originalAiScore = parsed.score;
-        const prevScore = Number(previousScore); // 숫자로 변환 (문자열 방지)
-        const scoreDiff = originalAiScore - prevScore;
-
-        console.log(
-          `[고쳐쓰기 분석] AI원점수: ${originalAiScore}, 이전점수: ${prevScore}, 차이: ${scoreDiff}`,
-        );
-        console.log(
-          `[고쳐쓰기 분석] 주제일치도: ${parsed.topicRelevanceScore}/10, 어휘다양성: ${parsed.vocabularyScore}/20`,
-        );
-
-        // 🚀 의미없는 수정 감지 (글자 반복, 무의미한 내용)
-        const isLowQualityRewrite =
-          (parsed.topicRelevanceScore !== undefined &&
-            parsed.topicRelevanceScore <= 3) || // 주제 일치도 3점 이하
-          originalAiScore <= 25; // AI가 매우 낮게 평가 (무의미한 글)
-
-        if (isLowQualityRewrite) {
-          // 의미없는 수정 - 이전 점수 유지
-          parsed.score = prevScore;
-          parsed.rewriteBlocked = true;
-          console.log(
-            `[고쳐쓰기 차단] 의미없는 수정 감지 - 점수 유지: ${parsed.score}점`,
-          );
-        } else if (scoreDiff >= 3) {
-          // AI가 충분히 올려줌 - AI 판단 존중
-          parsed.score = originalAiScore;
-          console.log(
-            `[고쳐쓰기] AI 충분히 상승: ${prevScore}→${originalAiScore}점 (+${scoreDiff})`,
-          );
-        } else {
-          // AI가 점수를 올려주지 않거나 조금만 올림 - 노력 보정
-          // 고쳐쓰기는 노력했으니 최소 +3점, 최대 +7점 보정
-          const minBonus = 3;
-          const maxBonus = 7;
-          // 이전 점수에 따라 보너스 차등 (높을수록 적게)
-          const bonus =
-            prevScore >= 90
-              ? minBonus
-              : prevScore >= 80
-                ? minBonus + 1
-                : prevScore >= 70
-                  ? minBonus + 2
-                  : prevScore >= 60
-                    ? minBonus + 3
-                    : maxBonus;
-
-          // AI 점수와 보정 점수 중 높은 것 선택
-          const boostedScore = Math.min(100, prevScore + bonus);
-          parsed.score = Math.max(originalAiScore, boostedScore);
-          console.log(
-            `[고쳐쓰기 보정] AI점수(${originalAiScore}) vs 보정점수(${boostedScore}) → ${parsed.score}점`,
-          );
-        }
-
-        parsed.isRewrite = true;
-        parsed.previousScore = prevScore;
-        parsed.scoreDiff = parsed.score - prevScore;
-      } else if (isRewrite) {
-        // 고쳐쓰기 모드인데 previousScore가 없는 경우 (버그 가능성)
-        console.warn(
-          `[고쳐쓰기 경고] isRewrite=true 인데 previousScore가 없음: ${previousScore}`,
-        );
-      }
-
-      // 🚀 AI 감지 결과 정리 (통합 분석)
-      if (parsed.aiCheck) {
-        parsed.aiUsageCheck = {
-          aiProbability: parsed.aiCheck.probability || 15,
-          verdict: parsed.aiCheck.verdict || "LOW",
-          explanation: parsed.aiCheck.reason || "직접 작성한 글로 판단됩니다.",
-        };
-        // 확률이 너무 높으면 조정
-        if (
-          parsed.aiUsageCheck.aiProbability > 60 &&
-          parsed.creativityScore >= 5
-        ) {
-          parsed.aiUsageCheck.aiProbability = Math.min(
-            parsed.aiUsageCheck.aiProbability,
-            40,
-          );
-          parsed.aiUsageCheck.verdict = "LOW";
+    // 같은 글 기록 — 고쳐쓰기 비교 말(growthNote)은 그 학생의 앞 글이 담겨 있어 남기지 않는다(다른 학생에게 새지 않게).
+    //   동시에 같은 글이 두 번 오면 먼저 쓴 쪽이 이긴다(create) — 늦은 쪽은 먼저 것을 쓴다(같은 글 = 같은 점수).
+    try {
+      const { growthNote: _g, ...shared } = result;
+      void _g;
+      await cacheRef.create({ result: shared, createdAt: new Date().toISOString() });
+    } catch (e) {
+      if (e.code === 6 || /already exists/i.test(String(e.message))) {
+        const first = (await cacheRef.get()).data()?.result;
+        if (first) {
+          trackApiCost(userId, schoolId, Math.ceil((prompt.length + responseText.length) * 0.5));
+          return finish({ ...first, growthNote: result.growthNote, cached: true });
         }
       } else {
-        // aiCheck가 없으면 기본값
-        parsed.aiUsageCheck = {
-          aiProbability: 15,
-          verdict: "LOW",
-          explanation: "직접 작성한 글로 판단됩니다.",
-        };
+        console.warn("[같은 글 기록 쓰기 실패]", e.message);
       }
-
-      // 🚀 분석 결과 캐시 저장 (동일 글 재제출 시 API 비용 절감)
-      if (!isRewrite) {
-        analysisCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
-        // 캐시 크기 제한 (100개 이상이면 오래된 것 삭제)
-        if (analysisCache.size > 100) {
-          const oldest = [...analysisCache.entries()].sort(
-            (a, b) => a[1].timestamp - b[1].timestamp,
-          )[0];
-          if (oldest) analysisCache.delete(oldest[0]);
-        }
-      }
-
-      // 💰 API 비용 추적 (대략적인 토큰 수 = 문자 수 * 0.5)
-      const estimatedTokens = Math.ceil(
-        (prompt.length + responseText.length) * 0.5,
-      );
-      trackApiCost(userId, schoolId, estimatedTokens);
-
-      return parsed;
-    } catch (error) {
-      console.error("글 분석 에러:", error);
-      throw new HttpsError("internal", `글 분석 실패: ${error.message}`);
     }
+
+    // 💰 API 비용 추적 (대략적인 토큰 수 = 문자 수 * 0.5)
+    trackApiCost(userId, schoolId, Math.ceil((prompt.length + responseText.length) * 0.5));
+    return finish(result);
   },
 );
 
@@ -2492,9 +2061,9 @@ JSON:{"hints":["구체적힌트1","2","3"],"questions":["생각해볼질문1","2
 JSON:{"introduction":"서론작성법","body":["본론포인트1","2","3"],"conclusion":"결론작성법","template":"예시구조"}`,
         polish: `주제:"${topic}"
 글:"""${text}"""
-Hemingway스타일: 복잡한문장→간결하게, 수동태→능동태
-내용추가X, 표현개선만, 구체적수정제안3-5개
-JSON:{"suggestions":[{"original":"원문","improved":"개선문장","reason":"이유","type":"clarity/flow/word"}],"tips":["실천팁1","2"],"praise":"구체적칭찬","readabilityTip":"가독성조언"}`,
+표현을 다듬을 곳 2-3개를 짚는다. 고친 문장은 쓰지 않는다(학생이 스스로 고친다 — 2026-11-20 업그레이드 1-1).
+original=글에서 그대로 옮긴 구절, reason=왜 다듬으면 좋은지, hint=스스로 고치게 하는 질문.
+JSON:{"suggestions":[{"original":"원문구절","reason":"이유","hint":"질문형 힌트","type":"clarity/flow/word"}],"tips":["실천팁1","2"],"praise":"구체적칭찬","readabilityTip":"가독성조언"}`,
         expand: `주제:"${topic}"
 글:"""${text}"""
 ProWritingAid스타일: 깊이있는확장아이디어(직접쓰지X)
@@ -4230,4 +3799,116 @@ exports.updateUsageLimits = onCall(async (request) => {
     });
 
   return { success: true };
+});
+
+// ============================================
+// 🌱 노력 랭킹(2026-11-20 업그레이드 1-8) — 글이 제출되면 서버가 반 랭킹을 고친다.
+//   예전엔 브라우저가 classes.weeklyRanking 을 직접 썼다(규칙상 반 학생 누구나) — 점수·순위를 마음대로 바꿀 수 있었다.
+//   고쳐쓰기 여부와 나아진 점수는 클라가 보낸 값이 아니라 DB 의 앞 글에서 읽는다. 하루에 노력 점수를 받는 제출은 5편까지.
+//   점수식은 src/config/effort.js 와 같다(시험 scripts/test-effort-ranking.mjs · test-feedback-flow.mjs).
+// ============================================
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const EFFORT_DAILY_CAP = 5;
+const EFFORT_MIN_SCORE = 30;
+function effortPointsServer({ score, isRewrite, scoreDiff, passed }) {
+  if (!(score >= EFFORT_MIN_SCORE)) return 0;
+  let p = isRewrite ? 10 + Math.max(0, Math.min(20, Number(scoreDiff) || 0)) : 10;
+  if (passed) p += 5;
+  return p;
+}
+function kstPeriodKey(period) {
+  const k = new Date(Date.now() + 9 * 3600e3); // KST 를 UTC 필드로 읽는다
+  const y = k.getUTCFullYear();
+  if (period === "weekly") {
+    const start = Date.UTC(y, 0, 1);
+    const days = Math.floor((Date.UTC(y, k.getUTCMonth(), k.getUTCDate()) - start) / 864e5);
+    const week = Math.ceil((days + new Date(start).getUTCDay() + 1) / 7);
+    return `${y}-W${week}`;
+  }
+  return `${y}-${String(k.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+exports.onWritingSubmitted = onDocumentWritten({ document: "writings/{writingId}", database: DATABASE_ID }, async (event) => {
+  const after = event.data?.after;
+  if (!after?.exists) return;
+  const d = after.data();
+  if (d.isDraft || typeof d.score !== "number" || !d.classCode || !d.studentId) return;
+  const b = event.data.before?.exists ? event.data.before.data() : null;
+  if (b && !b.isDraft && b.score === d.score && b.content === d.content) return; // 선생님 확인 등 다른 칸만 바뀜
+  if (d.rankedAt) return; // 이미 반영(트리거 재시도)
+
+  // 같은 주제의 앞 글(이 글 제외, 가장 최근 제출)
+  const prevSnap = await db.collection("writings").where("studentId", "==", d.studentId).where("topic", "==", d.topic || "").where("isDraft", "==", false).get();
+  const prev = prevSnap.docs
+    .filter((x) => x.id !== after.id && (x.data().submittedAt || "") < (d.submittedAt || "~"))
+    .map((x) => x.data())
+    .sort((x, y) => String(y.submittedAt || "").localeCompare(String(x.submittedAt || "")))[0];
+  const isRewrite = !!prev;
+  const unchanged = prev && String(prev.content || "").trim() === String(d.content || "").trim();
+  const scoreDiff = prev ? d.score - (Number(prev.score) || 0) : 0;
+  const passed = d.score >= (Number(d.minScore) || 70);
+  const user = (await db.doc(`users/${d.studentId}`).get()).data() || {};
+  const today = kstDay();
+
+  const classRef = db.doc(`classes/${d.classCode}`);
+  await db.runTransaction(async (tx) => {
+    const cls = await tx.get(classRef);
+    if (!cls.exists) return;
+    const cd = cls.data();
+    const update = { rankingUpdatedAt: new Date().toISOString() };
+    for (const period of ["weekly", "monthly"]) {
+      const field = period === "weekly" ? "weeklyRanking" : "monthlyRanking";
+      const key = kstPeriodKey(period);
+      const saved = cd[field];
+      let rows = saved && saved.periodKey === key && saved.formula === "effort1" ? [...(saved.data || [])] : [];
+      let i = rows.findIndex((r) => r.studentId === d.studentId);
+      if (i < 0) {
+        rows.push({ studentId: d.studentId, nickname: user.nickname || user.name || "학생", submissionCount: 0, averageScore: 0, passCount: 0, highScore: 0, rewriteCount: 0, growthSum: 0, effortScore: 0, effortDay: today, effortToday: 0 });
+        i = rows.length - 1;
+      }
+      const r = { ...rows[i] };
+      r.submissionCount = (r.submissionCount || 0) + 1;
+      r.averageScore = Math.round(((r.averageScore || 0) * (r.submissionCount - 1) + d.score) / r.submissionCount);
+      if (passed) r.passCount = (r.passCount || 0) + 1;
+      r.highScore = Math.max(r.highScore || 0, d.score);
+      if (r.effortDay !== today) { r.effortDay = today; r.effortToday = 0; }
+      let gain = unchanged ? 0 : effortPointsServer({ score: d.score, isRewrite, scoreDiff, passed });
+      if (gain > 0 && r.effortToday >= EFFORT_DAILY_CAP) gain = 0;
+      if (gain > 0) r.effortToday += 1;
+      if (isRewrite && !unchanged) r.rewriteCount = (r.rewriteCount || 0) + 1;
+      if (isRewrite && !unchanged && scoreDiff > 0) r.growthSum = (r.growthSum || 0) + Math.min(20, scoreDiff);
+      r.effortScore = (r.effortScore || 0) + gain;
+      r.rankingScore = r.effortScore;
+      r.points = user.points || r.points || 0;
+      r.nickname = user.nickname || user.name || r.nickname;
+      rows[i] = r;
+      rows.sort((x, y) => (y.rankingScore || 0) - (x.rankingScore || 0));
+      rows = rows.map((x, k) => ({ ...x, rank: k + 1 }));
+      update[field] = { periodKey: key, formula: "effort1", data: rows, updatedAt: new Date().toISOString() };
+    }
+    tx.update(classRef, update);
+    tx.update(after.ref, { rankedAt: new Date().toISOString() });
+  });
+});
+
+// 🧹 첨삭 서명(analyses)·같은 글 기록(analysisCache) 정리 — 매일 한국 시간 새벽 4시.
+//   서명은 제출할 때만 쓰이니 30일, 같은 글 기록은 90일(읽을 때도 90일 넘은 건 안 쓴다). 한 번에 400개씩·createdAt 단일 색인.
+exports.cleanupAnalyses = onSchedule({ schedule: "0 19 * * *", timeZone: "UTC" }, async () => {
+  const sweep = async (col, days) => {
+    const cutoff = new Date(Date.now() - days * 864e5).toISOString();
+    let total = 0;
+    for (let round = 0; round < 10; round++) {
+      const snap = await db.collection(col).where("createdAt", "<", cutoff).limit(400).get();
+      if (snap.empty) break;
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      total += snap.size;
+      if (snap.size < 400) break;
+    }
+    return total;
+  };
+  const a = await sweep("analyses", 30);
+  const c = await sweep("analysisCache", ANALYSIS_CACHE_DAYS);
+  console.log(`[정리] 첨삭 서명 ${a}개 · 같은 글 기록 ${c}개 삭제`);
 });

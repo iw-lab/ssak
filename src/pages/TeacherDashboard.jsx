@@ -37,6 +37,8 @@ import {
   checkAndRunScheduler,
 } from "../services/schedulerService";
 import { GRADE_LEVELS, MAX_STUDENTS_PER_CLASS } from "../config/auth";
+import TeacherReview, { ProcessSummary } from "../components/TeacherReview";
+import { CRITERIA, GENRES } from "../config/writingOptions";
 import {
   batchCreateStudents,
   deleteClassWithStudents,
@@ -3914,39 +3916,20 @@ export default function TeacherDashboard({ user, userData }) {
               </div>
             </div>
 
-            {/* 점수 상세 */}
+            {/* 점수 상세 — 만점은 첨삭 기준표(writingOptions.CRITERIA)와 같게(예전엔 30·25로 잘못 보였다) */}
             {selectedWriting.analysis && (
               <div className="px-6 py-3 bg-background flex flex-wrap items-center gap-4 border-b">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">내용</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {selectedWriting.analysis.contentScore}/30
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">구성</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {selectedWriting.analysis.structureScore}/25
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">어휘</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {selectedWriting.analysis.vocabularyScore}/20
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">문법</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {selectedWriting.analysis.grammarScore}/15
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">창의성</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {selectedWriting.analysis.creativityScore}/10
-                  </span>
-                </div>
+                {CRITERIA.map((c) => {
+                  const legacy = { content: "contentScore", topic: "topicRelevanceScore", structure: "structureScore", vocabulary: "vocabularyScore", grammar: "grammarScore", creativity: "creativityScore" }[c.key];
+                  const v = selectedWriting.analysis[legacy];
+                  if (v === undefined) return null;
+                  return (
+                    <div key={c.key} className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">{c.name}</span>
+                      <span className="text-lg font-bold text-blue-600">{v}/{c.max}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -3961,6 +3944,15 @@ export default function TeacherDashboard({ user, userData }) {
                   {selectedWriting.content}
                 </div>
               </div>
+
+              {/* 선생님 확인·한마디·점수(1-7) + 쓰는 과정(2-B) */}
+              <ProcessSummary process={selectedWriting.process} />
+              <TeacherReview
+                key={selectedWriting.writingId}
+                writing={selectedWriting}
+                teacherName={userData?.name || "선생님"}
+                onSaved={(w) => setSelectedWriting(w)}
+              />
 
               {/* AI 종합 피드백 */}
               {selectedWriting.analysis?.overallFeedback && (

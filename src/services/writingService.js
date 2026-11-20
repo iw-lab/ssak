@@ -1,3 +1,4 @@
+import { effortPoints } from "../config/effort.js";
 import {
   collection,
   doc,
@@ -428,6 +429,7 @@ export async function submitWriting(
       previousScore,
       previousText,
       writingData.maskWords || [],
+      { genre: writingData.genre, goal: writingData.goal, focus: writingData.focus },
     );
 
     // 5. 제출 (기준 점수 체크 제거 - 모든 점수 허용)
@@ -510,11 +512,6 @@ export async function submitWriting(
         ...writingData,
         score: newScore,
         analysis: analysisResult,
-        aiUsageCheck: analysisResult.aiUsageCheck || {
-          aiProbability: 15,
-          verdict: "LOW",
-          explanation: "직접 작성한 글로 판단됩니다.",
-        },
         notSaved: true,
         reason: "동일 주제의 기존 글보다 점수가 낮아 저장되지 않았습니다.",
       };
@@ -531,12 +528,8 @@ export async function submitWriting(
       createdAt: writingData.createdAt || now,
       submittedAt: now,
       analysis: analysisResult,
+      analysisId: analysisResult.analysisId || null, // 서버 서명 — 규칙이 점수와 대조(2026-11-20)
       plagiarismCheck: null, // 자기 표절 검사 제거
-      aiUsageCheck: analysisResult.aiUsageCheck || {
-        aiProbability: 15,
-        verdict: "LOW",
-        explanation: "직접 작성한 글로 판단됩니다.",
-      }, // 통합 분석 결과 사용 (undefined 방지)
       score: newScore,
       minScore: minScore, // 과제 기준점수 명시적 저장 (선생님 설정값 유지)
     };
@@ -549,7 +542,7 @@ export async function submitWriting(
     invalidateStudentStatsCache(studentId);
 
     // 7. 포인트 지급 (고쳐쓰기 여부, AI 가능성, userData 전달)
-    const aiProbability = analysisResult.aiUsageCheck?.aiProbability || 0;
+    const aiProbability = 0; // AI 확률 판정 없앰(2026-11-20) — 판정기는 틀린다. 쓰는 과정 기록(process)으로 대체
     // newScore 사용 (테스트 모드에서 점수가 변경될 수 있음)
     const earnedPoints = await awardPoints(
       studentId,
@@ -584,12 +577,8 @@ export async function submitWriting(
 
       // 랭킹 증분 업데이트 (글 제출 시 바로 반영, 랭킹 조회 시 570회 읽기 방지!)
       // newScore 사용 (테스트 모드에서 점수가 변경될 수 있음)
-      await updateStudentRankingOnSubmit(
-        classCode,
-        studentId,
-        newScore,
-        userData,
-      );
+      // 랭킹은 서버 트리거(onWritingSubmitted)가 고친다 — 브라우저가 반 랭킹을 직접 쓰던 길은 규칙으로 닫았다(2026-11-20)
+      invalidateRankingCache(classCode);
     }
 
     // users 문서의 writingSummary 업데이트 (로그인 시 DB 읽기 0회!)
@@ -1164,6 +1153,7 @@ export async function getClassRanking(
     if (
       savedRanking &&
       savedRanking.periodKey === periodKey &&
+      savedRanking.formula === "effort1" && // 옛 점수식 랭킹은 보이지 않게(새 식과 섞이면 줄이 엉킨다)
       savedRanking.data
     ) {
       // 디버그 로그 감소
@@ -1191,11 +1181,14 @@ export async function getClassRanking(
 
 // 글 제출 시 랭킹 업데이트 (증분 업데이트)
 // 최적화: 주간/월간 한 번에 업데이트 (쓰기 2회 → 1회)
+export { effortPoints }; // 정의는 src/config/effort.js(시험이 브라우저 없이 부른다)
+
 export async function updateStudentRankingOnSubmit(
   classCode,
   studentId,
   score,
   userData,
+  extra = {}, // { isRewrite, scoreDiff }
 ) {
   try {
     if (!classCode) return;
@@ -1218,7 +1211,8 @@ export async function updateStudentRankingOnSubmit(
 
       // 새 기간이면 빈 랭킹으로 시작 (재계산 없음! = 읽기 0회)
       let rankingData = [];
-      if (savedRanking && savedRanking.periodKey === periodKey) {
+      // 옛 점수식 랭킹이 남아 있으면 새로 시작(같은 기간에 두 식이 섞이면 줄이 엉킨다)
+      if (savedRanking && savedRanking.periodKey === periodKey && savedRanking.formula === "effort1") {
         rankingData = [...(savedRanking.data || [])]; // 복사본 사용
       } else {
         // 디버그 로그 감소
@@ -1240,9 +1234,11 @@ export async function updateStudentRankingOnSubmit(
         );
         if (score >= 70) student.passCount += 1; // 통과 기준 70점으로 변경
         if (score > student.highScore) student.highScore = score;
-        // 랭킹 점수: 평균 점수 × 3 + 통과 횟수 × 20 (제출 수 제외!)
-        student.rankingScore =
-          student.averageScore * 3 + student.passCount * 20;
+        if (extra.isRewrite) student.rewriteCount = (student.rewriteCount || 0) + 1;
+        if (extra.isRewrite && extra.scoreDiff > 0) student.growthSum = (student.growthSum || 0) + Math.min(20, extra.scoreDiff);
+        // 노력 점수 — 옛 기록(점수식 rankingScore)은 이번 기간이 끝나면 저절로 새로 시작한다
+        student.effortScore = (student.effortScore || 0) + effortPoints({ score, ...extra, passed: score >= 70 });
+        student.rankingScore = student.effortScore;
         student.points = userData?.points || student.points;
         student.nickname = nickname;
         rankingData[studentIndex] = student;
@@ -1257,8 +1253,10 @@ export async function updateStudentRankingOnSubmit(
           averageScore: score,
           passCount: isPassed ? 1 : 0,
           highScore: score,
-          // 랭킹 점수: 평균 점수 × 3 + 통과 횟수 × 20 (제출 수 제외!)
-          rankingScore: score * 3 + (isPassed ? 20 : 0),
+          rewriteCount: extra.isRewrite ? 1 : 0,
+          growthSum: extra.isRewrite && extra.scoreDiff > 0 ? Math.min(20, extra.scoreDiff) : 0,
+          effortScore: effortPoints({ score, ...extra, passed: isPassed }),
+          rankingScore: effortPoints({ score, ...extra, passed: isPassed }),
           streakDays: userData?.streakDays || 0,
         });
       }
@@ -1273,6 +1271,7 @@ export async function updateStudentRankingOnSubmit(
       // 업데이트 데이터에 추가
       updateData[rankingField] = {
         periodKey,
+        formula: "effort1",
         data: rankingData,
         updatedAt,
       };
