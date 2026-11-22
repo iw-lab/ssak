@@ -59,7 +59,16 @@ const SPACED_INST = /^(정류장|정거장|사거리|삼거리|오거리|아파�
 const WITH_NEXT = /^(같이|함께|둘이|셋이|놀|싸우|만나|화해|얘기|이야기|통화|사귀|짝|친하|다투|헤어지|손잡|수다|장난|약속|전화|카톡|문자)/;
 const VOC_OK = W("엄마 아빠 얘 애 친구 선생님 형 누나 언니 오빠 동생 아가 아기 할머니 할아버지 이모 삼촌 고모 아저씨 아줌마 여보 자기 얘들 애들 친구들 강아지 고양이 멍멍 야옹 하느님 주님 임금님 바람 구름 나무 하늘 바다 별 달 해 봄 꽃 비 눈 세상 사람 여러분 형아 누나야 할미 할비 아들 딸 공주 왕자 대장 바보 멍청이 귀염둥이 이놈 녀석 인간 지구 세월 시간 나 너 저 우리 저기 여기 거기 뭐 이게 그게 진짜 정말 맞 아니");
 const isH = (s) => /[가-힣]/.test(s);
-export function deepSpans(text, kiwi) {
+// 허용 낱말(자주 쓰는 일반명사, 빈도순) — level 2 이상에서는 여기 없는 명사를 가린다. 파일은 빈도순이라 앞에서 N개만 쓸 수 있다.
+let ALLOW_ALL = null;
+const allowSet = (n) => { ALLOW_ALL ??= readFileSync(new URL("./pii-allow.txt", import.meta.url), "utf8").split("\n").filter(Boolean); return new Set(ALLOW_ALL.slice(0, n)); };
+const ALLOW_CACHE = new Map();
+// 이름으로도 흔히 쓰는 보통 낱말 — level 3 에서는 문맥과 상관없이 가린다
+const NAME_WORDS = W("맑음 반디 겨레 아람 보라 나래 미리내 한샘 새롬 새론 은하 은솔 다솔 예슬 한나 다은 가은 시원 초원 강산 바위 소원 기쁨 은총 축복 꽃님 달님 별님 봄비 솔잎 빛나 예랑 아리 채움 나눔 다움 새별 한비 단아 찬솔 찬들 힘찬 슬찬 늘봄 늘찬 가을이 하늬 마리 두리 세리 아롱 다롱 은비 금비 꽃비 이솔 해솔 해찬 해담 해온 달래 진달래 나리 개나리 장미 백합 국화 매화 모란 연꽃 루리 로운 이로운 새로운 고운이 푸른이 맑은 밝음 밝은이 미소 하늘 보람 나라 우주 지수 사랑 소망 이슬 한결 은별 바다 구름 가을 겨울 여름 새벽 마루 그루 단비 슬기 누리 다솜 아름 초롱 한솔 나리 보리 다래 이루 가람 한별 샛별 햇살 노을 진주 수정 유리 지혜 믿음 은혜 다정 한빛 새봄 이삭 나비 소라 보배 한울 가온 라온 다온 도담 고운 푸름 봄 별 솔 소리 누리 아라 다인 예솔 한울 바름 슬아 태양 희망 기쁨 사랑이 하람 온유 단아 고은 세나 미래 영웅 대한 승리 다운 보름 여울 이든 서리 겨레 한길");
+export function deepSpans(text, kiwi, opts = {}) {
+  const level = opts.level ?? 1, allowN = opts.allowN ?? 99999;
+  if (level >= 2 && !ALLOW_CACHE.has(allowN)) ALLOW_CACHE.set(allowN, allowSet(allowN));
+  const ALLOW = level >= 2 ? ALLOW_CACHE.get(allowN) : null;
   const toks = kiwi.tokenize(text);
   const spans = [], names = new Set();
   const ctxNames = new Set(); // 흔한 낱말과 같은 이름 — 사람 문맥으로 잡힌 것(같은 글의 «별이는·별이가»까지 가리려고)
@@ -170,6 +179,14 @@ export function deepSpans(text, kiwi) {
     }
     if (sentStart(i) && n && n.tag === "NP" && /^(너|니|넌|네)$/.test(n.str) && !adj(t, n)) { add(t, "VOC2"); continue; }
   }
+  if (level >= 3) { // 분석기가 «이슬»을 이+슬로, «맑음이»를 맑+음+이로 쪼개도 어절 겉모양으로 잡는다
+    for (const m of text.matchAll(/(?<![가-힣])([가-힣]{1,4}?)(?=(?:이가|이는|이랑|이한테|이네|이도|이를|이의|이야|가|는|은|이|을|를|야|아|랑|와|과|도|만|의|한테|에게|네|님|씨|쌤)?(?![가-힣]))/g)) if (m[1].length >= 2 && NAME_WORDS.has(m[1])) spans.push([m.index, m.index + m[1].length, "NAMEWORD", m[1]]);
+  }
+  if (level >= 2) for (const t of toks) {
+    if (titled(t) || !isH(t.str)) continue;
+    if (level >= 3 && NAME_WORDS.has(t.str) && /^(NNG|NNP|MAG|NP)$/.test(t.tag)) { spans.push([t.position, t.position + t.length, "NAMEWORD", t.str]); continue; }
+    if (t.tag === "NNG" && t.str.length >= 2 && !ALLOW.has(t.str) && !SAFE_NNP.has(t.str) && !PERSON_OK.has(t.str) && !KIN.has(t.str)) spans.push([t.position, t.position + t.length, "NOTALLOW", t.str]);
+  }
   return { spans, names, ctxNames };
 }
 const K = "[공영일이삼사오육칠팔구]";
@@ -197,7 +214,14 @@ const NUM_RULES2 = [
   [/(?<=(?:생일|태어)[^\n]{0,40})\d{1,2}\s?월\s?\d{1,2}\s?일/g, "BDAY"],
   [/(?<=생일[^\n]{0,40})(?<![\d/])\d{1,2}\/\d{1,2}(?![\d/])/g, "BDAY"],
   // 비밀번호·암호·학번 뒤 숫자(3~8자리) — «비밀번호를 알려줬다. 1029라고», «학번 20345»
-  [/(?<=(?:비밀번호|비번|암호|학번|현관|도어락)[^\n]{0,20})(?<!\d)\d{3,8}(?!\d)/g, "CODE"],
+  [/(?<=(?:비밀번호|비번|암호|학번|현관|도어락|카드\s?번호|회원\s?번호|사물함\s?번호|신발장\s?번호)[^\n]{0,20})(?<!\d)\d{3,8}(?!\d)/g, "CODE"],
+  // 학년·반·번호 묶음 «4학년 1반 22번», «3-2반 17번» · 아파트 동·호 «102동», «102-1503»
+  [/\d\s?학년\s?\d{1,2}\s?반\s?\d{1,2}\s?번/g, "CLASSNO"],
+  [/(?<!\d)\d\s?-\s?\d{1,2}\s?반\s?\d{1,2}\s?번/g, "CLASSNO"],
+  [/(?<![\d가-힣])\d{3,4}\s?동(?!안|네|아리|물|생|작|화|전|시)/g, "DONGHO"],
+  [/(?<![\d-])\d{3}-\d{3,4}(?![\d-])/g, "DONGHO"],
+  // 초성으로 쓴 이름 «ㅈㅎ이 또 늦었다» — 흔한 초성 말(ㅋㅋ·ㅇㅇ·ㄱㅊ…)은 둔다
+  [/(?<![ㄱ-ㅎㅏ-ㅣ가-힣])(?!ㅋㅋ|ㅎㅎ|ㅇㅇ|ㄴㄴ|ㄱㅅ|ㅇㅋ|ㄹㅇ|ㄱㅊ|ㅈㅅ|ㅊㅋ|ㄷㄷ|ㅂㅂ|ㅅㄱ|ㅇㅈ|ㄱㄱ|ㅎㅇ|ㅂㅇ|ㅇㅎ|ㅁㅊ|ㄱㄷ|ㅇㄷ|ㅁㄹ|ㄱㄹ|ㅉㅉ|ㅌㅌ)[ㄱ-ㅎ]{2,3}(?=이가|이는|이랑|이한테|이네|이도|이\s|가\s|는\s|랑\s|한테|네\s|야\s|아\s)/g, "INITIALS"],
   // 숫자 낀 아파트 차수·도로명 — «별하늘2차 아파트», «늘푸른2로 13길 5»
   [/(?<![가-힣])(?!(?:예선|본선|결승|시험|평가|수학|국어|영어|과학|사회|접종|백신|세계|대회|면접|모집|수업|방학|학기)\d)[가-힣]{2,8}\d{1,2}차(?![가-힣]*(?:전|시험|평가|접종|대전))/g, "APTNO"],
   // 한글에 숫자가 붙은 아이디 «콩콩이99», «뽀로로사랑꾼2013» — 뒤가 단위(명·개·시·분…)면 수량이다
@@ -261,6 +285,11 @@ function regexSpans(out, spans, ctxNames) {
     const w = m[2]; if (w.includes(MASK) || PERSON_OK.has(w) || /^(나|내|너|네|제|저|우리|새|내가|게임|카톡|학교|로블록스|마크|이게|그게|뭐|무슨|어떤|같은|다른|비밀)$/.test(w) || /(의|은|는|이|가|도|에서|에|랑|하고)$/.test(w)) continue;
     const st = m.index + m[1].length; spans.push([st, st + w.length, "CUEBEFORE", w]); if (/^[가-힣]{2,6}$/.test(w)) ctxNames.add(w);
   }
+  // 사람을 가리키는 말 바로 뒤 낱말 + 사람 조사: «친구 겨레랑», «반장 유리가»
+  for (const m of out.matchAll(/((?:^|[\s"'(])(?:친구|짝꿍|짝지|짝|단짝|반장|부반장|회장|부회장|전학생|후배|선배|옆자리|앞자리|뒷자리)\s)([가-힣]{2,3}?)(?=(?:이랑|랑|이한테|한테|이네|네|이가|가|이는|는|이도|도|와|과|이가|에게)(?:[\s.,!?]|$))/g)) {
+    const w = m[2]; if (PERSON_OK.has(w) || KIN.has(w) || /^(생일|엄마|아빠|동생|부모|가족|얼굴|이름|가방|필통|물건|생각|마음|모두|다들|전부|여럿|몇|누구|하나|서로|혼자|우리|너희|자기|본인|사이|관계|덕분|때문|선물|편지|소개|집|반|학교|학원|동네)$/.test(w)) continue;
+    const st = m.index + m[1].length; spans.push([st, st + w.length, "ROLEWORD", w]); ctxNames.add(w);
+  }
   // 이름을 대는 말: «이름이 강이든이라고», «이름: 서아» · 사투리 자기소개 «나 지우여»
   for (const m of out.matchAll(/((?:이름|성함)(?:은|이|\s?[:：])\s?)([가-힣]{2,4}?)(?=(?:이라고|라고|이야|야|이래|래|입니다|이에요|예요|이다|다|인데|이고)?(?:[\s.,!?/)]|$))/g)) {
     const w = m[2]; if (PERSON_OK.has(w) || /^(뭐|무엇|비밀|없|있|모르|어떻|그래|아직|원래|진짜|정말|너무|조금|모두|다들|같|다르|예쁘|멋지|특이|이상|웃기|길|짧)/.test(w)) continue;
@@ -299,8 +328,8 @@ export async function maskDeep(text, opts = {}) {
   const base = maskPII(text, { ...opts, extraWords: [] });
   let out = base.text; const rulesOnly = out; const log = [...pre];
   out = out.replace(/#(?=[가-힣A-Za-z])/g, "# "); // 해시태그는 띄워서 분석한다(«#서연이랑놀기»)
-  for (const [re, why] of [...NUM_RULES, ...NUM_RULES2]) out = out.replace(re, (m) => { log.push(`${why}:${m}`); return MASK; });
-  const { spans, names, ctxNames } = deepSpans(out, kiwi);
+  for (const [re, why] of [...NUM_RULES, ...NUM_RULES2]) if (why !== "CLASSNO" || (opts.level ?? 1) >= 3) out = out.replace(re, (m) => { log.push(`${why}:${m}`); return MASK; });
+  const { spans, names, ctxNames } = deepSpans(out, kiwi, opts);
   regexSpans(out, spans, ctxNames);
   out = applySpans(out, spans, log);
   { // 2회차: 가린 뒤에야 보이는 꼴
