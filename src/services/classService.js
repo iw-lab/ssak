@@ -425,3 +425,13 @@ export async function issueStudentPins(classCode, studentIds) {
   const result = await fn(studentIds ? { classCode, studentIds } : { classCode });
   return result.data.results || [];
 }
+
+// 가림 명단 — 반 학생 이름(글에서 가릴 낱말). 함수로만 읽고 쓴다(규칙은 직접 접근을 모두 거절).
+export async function getMaskNames(classCode) {
+  const result = await httpsCallable(functions, 'getMaskNames')({ classCode });
+  return { names: result.data.names || [], terms: result.data.terms || [] };
+}
+export async function setMaskNames(classCode, names) {
+  const result = await httpsCallable(functions, 'setMaskNames')({ classCode, names });
+  return { names: result.data.names || [], terms: result.data.terms || [] };
+}

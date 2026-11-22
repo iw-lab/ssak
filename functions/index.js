@@ -49,11 +49,45 @@ const MASK_FN = { memory: "2GiB", cpu: 1 };
 function cleanMaskWords(words) {
   return (Array.isArray(words) ? words : []).filter((w) => typeof w === "string" && w.trim().length >= 1 && w.length <= 20).slice(0, 40);
 }
-async function maskForAI(text, extraWords) {
+// 반 명단(가림용 이름) — 담임이 넣은 반 아이 이름. 학생이면 자기 반, 교사면 자기 반 전부. 함수만 읽고 쓴다(classMaskNames 규칙 = 전부 거절).
+// 반 명단은 부를 때마다 읽는다(읽기 2번). 인스턴스 안에 담아 두면 함수마다 인스턴스가 달라 담임이 방금 넣은 이름이 1분 동안 안 가려진다.
+async function rosterFor(request) {
+  const uid = request?.auth?.uid;
+  if (!uid) return [];
+  let names = [];
+  try {
+    const u = (await db.doc(`users/${uid}`).get()).data();
+    if (u?.role === "student" && typeof u.classCode === "string" && /^[A-Za-z0-9]{1,20}$/.test(u.classCode)) {
+      names = (await db.doc(`classMaskNames/${u.classCode}`).get()).data()?.names || [];
+    } else if (u?.role === "teacher") {
+      const q = await db.collection("classMaskNames").where("teacherId", "==", uid).limit(50).get();
+      names = q.docs.flatMap((d) => d.data().names || []);
+    }
+  } catch (e) {
+    console.error("[반 명단 읽기 실패 — 전송 막음]", e.message);
+    throw new HttpsError("unavailable", "개인정보 가림 준비가 안 됐어요. 조금 뒤에 다시 해 주세요.");
+  }
+  return [...new Set(names.filter((n) => typeof n === "string"))].slice(0, 3000); // 50반 × 60명
+}
+// 꼴이 안 맞는 항목이 하나라도 있으면 거절한다 — 조용히 버리면 «Kim» 한 줄로 있던 명단이 통째로 지워진다.
+function cleanRosterNames(names) {
+  if (!Array.isArray(names) || names.length > 200) throw new HttpsError("invalid-argument", "명단이 올바르지 않습니다.");
+  const out = new Set();
+  for (const raw of names) {
+    if (typeof raw !== "string" || raw.length > 20) throw new HttpsError("invalid-argument", "이름은 한글 2~5자로 적어 주세요.");
+    const n = raw.normalize("NFC").replace(/\s/g, "");
+    if (!/^[가-힣]{2,5}$/.test(n)) throw new HttpsError("invalid-argument", "이름은 한글 2~5자로 적어 주세요.");
+    out.add(n);
+  }
+  if (out.size > 60) throw new HttpsError("invalid-argument", "명단은 60명까지 넣을 수 있습니다.");
+  return [...out];
+}
+async function maskForAI(text, extraWords, request) {
   if (String(text || "").length > MAX_AI_TEXT) throw new HttpsError("invalid-argument", `글이 너무 길어요(${MAX_AI_TEXT.toLocaleString()}자까지).`);
   const { maskDeep } = await piiDeepModule;
+  const rosterNames = await rosterFor(request); // 못 읽으면 전송을 막는다(명단 없이 보내지 않는다)
   try {
-    return await maskDeep(String(text || ""), { extraWords: cleanMaskWords(extraWords) });
+    return await maskDeep(String(text || ""), { extraWords: cleanMaskWords(extraWords), rosterNames });
   } catch (e) {
     console.error("[가림 2층 실패 — 전송 막음]", e.message);
     throw new HttpsError("unavailable", "개인정보 가림 준비가 안 됐어요. 조금 뒤에 다시 해 주세요.");
@@ -1480,9 +1514,9 @@ exports.analyzeWriting = onCall(
     // 🔒 국외 AI 로 가기 전 개인정보 가림(이름·주소·학교·전화 → ㅇㅇㅇ) — 학생이 미리보기에서 더 가린 낱말(maskWords) 포함
     const maskWords = Array.isArray(data.maskWords) ? data.maskWords : [];
     const originalLen = typeof text === "string" ? text.length : 0; // 서명에 묶을 원문 길이(가리기 전)
-    if (text != null) text = (await maskForAI(text, maskWords)).text;
-    if (previousText != null) previousText = (await maskForAI(previousText, maskWords)).text;
-    if (topic != null) topic = (await maskForAI(topic, maskWords)).text;
+    if (text != null) text = (await maskForAI(text, maskWords, request)).text;
+    if (previousText != null) previousText = (await maskForAI(previousText, maskWords, request)).text;
+    if (topic != null) topic = (await maskForAI(topic, maskWords, request)).text;
     if (!text || !topic) {
       throw new HttpsError("invalid-argument", "텍스트와 주제가 필요합니다.");
     }
@@ -1622,9 +1656,9 @@ exports.detectPlagiarism = onCall(
 
     const data = request.data;
     let { text, previousSubmissions } = data || {};
-    if (text != null) text = (await maskForAI(text, data?.maskWords)).text;
+    if (text != null) text = (await maskForAI(text, data?.maskWords, request)).text;
     if (Array.isArray(previousSubmissions)) {
-      previousSubmissions = await Promise.all(previousSubmissions.slice(0, 10).map(async (x) => ({ ...x, content: (await maskForAI(x?.content, data?.maskWords)).text })));
+      previousSubmissions = await Promise.all(previousSubmissions.slice(0, 10).map(async (x) => ({ ...x, content: (await maskForAI(x?.content, data?.maskWords, request)).text })));
     }
 
     if (!text) {
@@ -1892,8 +1926,8 @@ exports.detectAIUsage = onCall({ secrets: [anthropicApiKey], ...MASK_FN }, async
 
   const data = request.data;
   let { text, topic } = data || {};
-  if (text != null) text = (await maskForAI(text, data?.maskWords)).text;
-  if (topic != null) topic = (await maskForAI(topic, data?.maskWords)).text;
+  if (text != null) text = (await maskForAI(text, data?.maskWords, request)).text;
+  if (topic != null) topic = (await maskForAI(topic, data?.maskWords, request)).text;
 
   if (!text) {
     throw new HttpsError("invalid-argument", "텍스트가 필요합니다.");
@@ -2041,8 +2075,8 @@ exports.getWritingHelp = onCall(
 
     const data = request.data;
     let { text, topic, helpType } = data || {};
-    if (text != null) text = (await maskForAI(text, data?.maskWords)).text;
-    if (topic != null) topic = (await maskForAI(topic, data?.maskWords)).text;
+    if (text != null) text = (await maskForAI(text, data?.maskWords, request)).text;
+    if (topic != null) topic = (await maskForAI(topic, data?.maskWords, request)).text;
 
     if (!topic) {
       throw new HttpsError("invalid-argument", "주제가 필요합니다.");
@@ -2126,8 +2160,8 @@ exports.getQuickAdvice = onCall(
 
     const data = request.data;
     let { text, topic, gradeLevel, adviceType } = data || {};
-    if (text != null) text = (await maskForAI(text, data?.maskWords)).text;
-    if (topic != null) topic = (await maskForAI(topic, data?.maskWords)).text;
+    if (text != null) text = (await maskForAI(text, data?.maskWords, request)).text;
+    if (topic != null) topic = (await maskForAI(topic, data?.maskWords, request)).text;
 
     if (!text || !topic) {
       throw new HttpsError("invalid-argument", "텍스트와 주제가 필요합니다.");
@@ -2663,6 +2697,7 @@ exports.deleteClassWithStudents = onCall(async (request) => {
     // 학급 문서 삭제
     await db.doc(`retiredClassCodes/${classCode}`).set({ retiredAt: new Date().toISOString() }); // 같은 코드 재사용 금지
     await classRef.delete();
+    await db.doc(`classMaskNames/${classCode}`).delete(); // 가림용 반 명단도 함께 — 반 문서 뒤에(명단 저장은 반 문서가 있을 때만 되므로 되살아나지 않는다)
 
     // 🚀 학급 삭제 후 슈퍼관리자 classesSummary 동기화
     await syncSuperAdminClassesSummary();
@@ -2803,6 +2838,7 @@ exports.autoDeleteAllClassesOnMarch1 = onSchedule(
         // 학급 문서 삭제 + 코드 은퇴(같은 코드로 새 반을 만들어 남은 글을 보는 길 차단)
         await db.doc(`retiredClassCodes/${classCode}`).set({ retiredAt: new Date().toISOString() });
         await db.doc(`classes/${classCode}`).delete();
+        await db.doc(`classMaskNames/${classCode}`).delete(); // 가림용 반 명단도 함께 — 반 문서 뒤에
 
         const deletedStudentsInClass = result.deletedStudents;
         const deletedWritingsInClass = result.deletedWritings;
@@ -4030,6 +4066,30 @@ async function studentMe(request) {
 // 🔒 «AI 선생님에게 이렇게 보내요» 미리보기 — 서버가 실제로 보낼 때와 같은 가림(규칙 + 분석 층)을 그대로 돌려준다.
 //   분석 층은 서버에서만 돈다(모델 110MB) — 화면이 따로 가리면 «보여 준 것»과 «보낸 것»이 달라진다.
 //   AI 를 부르지 않는다(0원). 로그인한 사람만, 글은 MAX_AI_TEXT 까지.
+// 반 명단(가림용 이름) 넣기·보기 — 담임만. 문서는 함수만 다룬다.
+exports.setMaskNames = onCall(async (request) => {
+  const { classCode, names } = request.data || {};
+  await assertClassOwner(request, classCode);
+  const clean = cleanRosterNames(names);
+  const ref = db.doc(`classMaskNames/${classCode}`);
+  // 반 문서 확인과 쓰기를 한 묶음으로 — 반을 지우는 사이에 저장이 끼어들어 지운 반의 명단이 되살아나지 않게
+  await db.runTransaction(async (tx) => {
+    const cls = await tx.get(db.doc(`classes/${classCode}`));
+    if (!cls.exists) throw new HttpsError("not-found", "클래스를 찾을 수 없습니다.");
+    if (clean.length === 0) tx.delete(ref);
+    else tx.set(ref, { classCode, teacherId: cls.data().teacherId || request.auth.uid, names: clean, updatedAt: new Date().toISOString() });
+  });
+  const { rosterTerms } = await piiDeepModule;
+  return { count: clean.length, names: clean, terms: rosterTerms(clean) };
+});
+exports.getMaskNames = onCall(async (request) => {
+  const { classCode } = request.data || {};
+  await assertClassOwner(request, classCode);
+  const names = (await db.doc(`classMaskNames/${classCode}`).get()).data()?.names || [];
+  const { rosterTerms } = await piiDeepModule;
+  return { names, terms: rosterTerms(names) };
+});
+
 const previewHits = new Map(); // uid → [분 시작, 횟수] — 인스턴스 안 속도 제한(AI 0원이지만 CPU·메모리를 쓴다)
 exports.maskPreview = onCall({ ...MASK_FN, maxInstances: 10 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -4040,7 +4100,7 @@ exports.maskPreview = onCall({ ...MASK_FN, maxInstances: 10 }, async (request) =
   const { texts, maskWords } = request.data || {};
   if (!Array.isArray(texts) || texts.length < 1 || texts.length > 4) throw new HttpsError("invalid-argument", "글이 필요합니다.");
   const out = [];
-  for (const t of texts) out.push((await maskForAI(t == null ? "" : t, maskWords)).text);
+  for (const t of texts) out.push((await maskForAI(t == null ? "" : t, maskWords, request)).text);
   return { texts: out };
 });
 
@@ -4064,8 +4124,8 @@ exports.peerShare = onCall({ ...MASK_FN }, async (request) => {
   }
   // 반 아이들 이름도 함께 가린다(친구 이름이 글에 나올 수 있다)
   const names = [...new Set((cls.students || []).flatMap((s) => [s.studentName, s.name, s.nickname]).filter((x) => typeof x === "string" && x.length >= 2))];
-  const masked = (await maskForAI(String(w.content || "").slice(0, 4000), names)).text;
-  const maskedTopic = (await maskForAI(String(w.topic || "").slice(0, 200), names)).text; // 주제에 이름을 쓴 아이도 있다
+  const masked = (await maskForAI(String(w.content || "").slice(0, 4000), names, request)).text;
+  const maskedTopic = (await maskForAI(String(w.topic || "").slice(0, 200), names, request)).text; // 주제에 이름을 쓴 아이도 있다
   await ref.set({ classCode: w.classCode, topic: maskedTopic, content: masked, ownerId: w.studentId, sharedAt: new Date().toISOString() });
   return { on: true };
 });

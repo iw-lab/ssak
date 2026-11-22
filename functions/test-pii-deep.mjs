@@ -2,7 +2,7 @@
 //   ① 규칙 시험(test-pii.mjs)의 LEAK·KEEP 문장을 2층으로도 돌린다(새면 실패, KEEP 은 지나친 가림 상한).
 //   ② 블라인드 묶음(test-data/pii-heldout*.json)마다 «막은 비율» 하한 — 묶음별 하한은 FLOOR 에 적는다.
 //   묶음을 보고 고친 뒤의 점수는 정직한 수치가 아니다 — 새 묶음은 고치기 전에 먼저 재서 README 에 적는다.
-import { maskDeep } from "./pii-deep.mjs";
+import { maskDeep, rosterTerms } from "./pii-deep.mjs";
 import { MASK } from "./pii.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 const src = readFileSync(new URL("./test-pii.mjs", import.meta.url), "utf8");
@@ -63,6 +63,19 @@ for (const f of readdirSync(new URL("./test-data/", import.meta.url)).filter((x)
   console.log(`${bad ? "❌" : "✅"} ${f}: 막음 ${tot - leak}/${tot} (${pct.toFixed(1)}% ≥ ${fl.block}) · 깨끗한 글 가림 ${masks}/${words}어절 (${opct.toFixed(1)}% ≤ ${fl.over})`);
   if (bad) fail++;
 }
+// 반 명단 — 담임이 넣은 이름은 문맥이 없어도 가린다. 명단이 없으면 못 잡는 꼴(그래서 명단이 필요하다)
+const ROSTER = ["김하늘", "박그린", "이자람", "최들판", "정유리", "온결", "한서연", "민수"];
+for (const [s, bad, keep] of [
+  ["하늘 왔다.", ["하늘"]], ["숙제를 그린한테 빌려줬다.", ["그린"]], ["급식당번은 이번주에 자람이다.", ["자람"]],
+  ["반장은 들판이고 부반장은 나다.", ["들판"]], ["오늘급식때김하늘옆에앉았다.", ["김하늘"]], ["온결이 옆에 앉았다.", ["온결"]],
+  ["유리창을 닦았다. 유리가 도와줬다.", ["유리가"], "유리창"], ["오늘급식때온결이옆에앉았다.", ["온결"]], ["하늘조차 몰랐다.", ["하늘"]], ["온결이랑은 안 놀아. 온결이뿐이다. 온결이잖아.", ["온결"]], ["친구하늘과갔다.", ["하늘"]], ["\u1112\u1161\u1102\u1173\u11af 왔다.".normalize("NFD"), ["하늘", "\u1112\u1161"]], ["김하\u200b늘이 왔다.", ["하\u200b늘", "하늘"]], ["급식당번은이번주에자람이다.", ["자람"]], ["짝은 온결인데 착하다. 발표는 하늘이었다.", ["온결", "하늘"]], ["하늘색 크레파스로 하늘을 칠했다고 하늘이가 말했다.", ["하늘이가"], "하늘색"], ["나랑서연이 놀았다. 민수네집에 갔다.", ["서연", "민수"]],
+]) {
+  const { text } = await maskDeep(s, { rosterNames: ROSTER });
+  const leaked = bad.filter((b) => text.includes(b));
+  if (leaked.length || (keep && !text.includes(keep))) { fail++; console.log(`❌ LEAK 명단 «${s}» → «${text}»`); }
+}
+if (rosterTerms(["김서연", "하늘", "a", "김", 3, "남궁민수", "피하람"]).join() !== "남궁민수,김서연,피하람,서연,하늘,민수,하람") { fail++; console.log("❌ LEAK 명단 낱말 만들기", rosterTerms(["김서연", "하늘", "a", "김", 3, "남궁민수", "피하람"]).join()); }
+console.log("반 명단 가림 17종");
 // 폭주 — 12,000자(서버 상한)짜리 고약한 글이 같은 길이 보통 글의 4배 안에 끝난다(정규식이 같은 공백을 나눠 먹으면 몇 분이 걸린다)
 const N = 12000, fill = (u) => u.repeat(Math.ceil(N / u.length)).slice(0, N);
 const NASTY = { "명단+공백": "우리 모둠 명단" + " ".repeat(N - 9) + "!", 공백: fill(" "), 쉼표이름: fill("가나, "), 숫자: fill("1"), "숫자-": fill("010-"), 한글숫자: fill("공일 "), 가림표시: fill("ㅇㅇㅇ "), 선생님: fill("선생님 "), 한글자: fill("가"), 따옴표: fill("'가'"), 괄호: fill("《가"), 물결: fill("- 가\n"), 주소: fill("가나리 "), 아이디: fill("아이디: "), 해시: fill("#가"), 줄바꿈: fill("\n"), 섞음: fill("명단 가나, 다라 · 마바 - 010 공일공 ㅇㅇㅇ 리 7 올림 ") };

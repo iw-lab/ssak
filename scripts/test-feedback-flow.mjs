@@ -114,6 +114,35 @@ ok(sent.includes(pv), "미리보기에 보인 글 = AI 로 나간 글");
 const extra = (await httpsCallable(fns, "maskPreview")({ texts: [""] }).catch((e) => e.code));
 ok(typeof extra === "string" || extra?.data, "빈 글 미리보기는 죽지 않음");
 
+// 반 명단 — 담임이 넣은 이름은 단서가 없어도 가려 보낸다. 명단은 담임만(학생·다른 교사 거절) 넣고 본다(2026-11-22)
+const rosterText = "오늘 급식 시간에 하늘 옆에 앉았다. 숙제는 그린한테 빌려줬다. 하늘색 크레파스로 그림도 그렸다. 집에 갈 때는 박그린이랑 같이 갔다. 정말 재미있는 하루였다.";
+const pvNo = (await httpsCallable(fns, "maskPreview")({ texts: [rosterText] })).data.texts[0];
+const stuSet = await httpsCallable(fns, "setMaskNames")({ classCode: "AAAAAA", names: ["김하늘"] }).then(() => "통과됨", (e) => e.code);
+const stuGet = await httpsCallable(fns, "getMaskNames")({ classCode: "AAAAAA" }).then(() => "통과됨", (e) => e.code);
+ok(stuSet === "functions/permission-denied" && stuGet === "functions/permission-denied", `학생은 명단을 넣지도 보지도 못함 (${stuSet}, ${stuGet})`);
+for (const [id, mail] of [["t1", "t1@x.kr"], ["t2", "t2@x.kr"]]) { await aauth.createUser({ uid: id, email: mail, password: "secret123" }); await adb.doc(`users/${id}`).set({ uid: id, role: "teacher", approved: true }); }
+await signInWithEmailAndPassword(auth, "t2@x.kr", "secret123");
+const otherSet = await httpsCallable(fns, "setMaskNames")({ classCode: "AAAAAA", names: ["김하늘"] }).then(() => "통과됨", (e) => e.code);
+const otherGet = await httpsCallable(fns, "getMaskNames")({ classCode: "AAAAAA" }).then(() => "통과됨", (e) => e.code);
+ok(otherSet === "functions/permission-denied" && otherGet === "functions/permission-denied", `다른 교사는 남의 반 명단을 넣지도 보지도 못함 (${otherSet}, ${otherGet})`);
+await signInWithEmailAndPassword(auth, "t1@x.kr", "secret123");
+const saved = (await httpsCallable(fns, "setMaskNames")({ classCode: "AAAAAA", names: ["김하늘", " 박 그린 ", "김하늘"] })).data;
+const badSet = [];
+for (const names of [["Kim"], ["김하늘", 7], ["가".repeat(9)], "김하늘", Array(201).fill("김하늘")]) badSet.push(await httpsCallable(fns, "setMaskNames")({ classCode: "AAAAAA", names }).then(() => "통과됨", (e) => e.code));
+const gotAll = (await httpsCallable(fns, "getMaskNames")({ classCode: "AAAAAA" })).data, got = gotAll.names;
+ok(saved.count === 2 && got.join() === "김하늘,박그린" && gotAll.terms.join() === "김하늘,박그린,하늘,그린", `담임이 명단 저장 — 겹친 것은 하나로 · 가릴 낱말도 돌려줌 (${gotAll.terms.join()})`);
+ok(badSet.every((c) => c === "functions/invalid-argument"), `꼴이 안 맞는 명단은 거절하고 있던 명단은 그대로 (${[...new Set(badSet)].join()})`);
+await signInWithEmailAndPassword(auth, "s@x.kr", "secret123");
+const pvYes = (await httpsCallable(fns, "maskPreview")({ texts: [rosterText] })).data.texts[0];
+ok(/하늘 옆|그린한테/.test(pvNo) && !/하늘 옆|그린한테|박그린/.test(pvYes) && pvYes.includes("하늘색"), `명단이 없으면 새던 이름이 명단을 넣자 가려짐 · 하늘색은 그대로 («${pvYes.slice(0, 50)}…»)`);
+const hitsBeforeRoster = aiHits;
+await analyze({ ...base, text: rosterText });
+const sent2 = JSON.parse(lastBody).messages.map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content))).join("\n");
+ok(aiHits === hitsBeforeRoster + 1 && !/하늘 옆|그린한테|박그린|김하늘/.test(lastBody) && sent2.includes(pvYes), "AI 로 나간 요청에 명단 이름 없음 · 미리보기 = 전송");
+await signInWithEmailAndPassword(auth, "t1@x.kr", "secret123");
+await httpsCallable(fns, "setMaskNames")({ classCode: "AAAAAA", names: [] });
+ok(!(await adb.doc("classMaskNames/AAAAAA").get()).exists, "빈 명단으로 저장하면 문서째 지움");
+
 console.log(bad ? `\n${bad}개 실패` : "\n모두 통과");
 stub.close();
 process.exit(bad ? 1 : 0);

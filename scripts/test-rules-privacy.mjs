@@ -40,6 +40,7 @@ await adb.doc("analyses/okA").set({ uid: sA, score: 77, len: 1 });
 await adb.doc("analyses/okB").set({ uid: sB, score: 99 });
 await adb.doc("analysisCache/k1").set({ result: { score: 77 } });
 await adb.doc("pinAuth/A1_01").set({ uid: sA, classCode: "A1", number: 1, salt: "s", hash: "h", fails: 0 });
+await adb.doc("classMaskNames/A1").set({ classCode: "A1", teacherId: "x", names: ["김하늘"] });
 await adb.doc("writings/wNull").set({ studentId: sB, classCode: null, content: "옛 글", isDraft: false });
 await adb.doc("writings/wA1").set({ studentId: sA, classCode: "A1", content: "내 글", topic: "일기", isDraft: false, createdAt: "2026-11-18" });
 
@@ -123,6 +124,8 @@ await client(async (auth, db) => {
   await attack("담임: 은퇴 코드 목록 읽기", () => getDoc(doc(db, "retiredClassCodes/OLD111")));
   await attack("담임: 사용량 기록 읽기", () => getDoc(doc(db, "usage/usage_x_2026-11-18")));
   await attack("담임: 자기번호 해시 읽기", () => getDoc(doc(db, "pinAuth/A1_01")));
+  await attack("담임: 가림 명단 직접 읽기(함수로만)", () => getDoc(doc(db, "classMaskNames/A1")));
+  await attack("담임: 가림 명단 직접 쓰기(함수로만)", () => setDoc(doc(db, "classMaskNames/A1"), { classCode: "A1", teacherId: c_uid(auth), names: ["x"] }));
   await legit("담임: 자기 반 글에 한마디·점수 고치기", () => updateDoc(doc(db, "writings/wA2"), { teacherComment: "끝맺음이 좋아요", teacherScore: 85, teacherCheckedAt: "2026-11-20", teacherName: "선생님" }));
   await attack("담임: 점수 150", () => updateDoc(doc(db, "writings/wA2"), { teacherScore: 150 }));
   await attack("담임: AI 점수 칸 직접 바꾸기", () => updateDoc(doc(db, "writings/wA2"), { score: 100 }));
@@ -134,6 +137,8 @@ await client(async (auth, db) => {
   await signInWithEmailAndPassword(auth, "sa001@school-a.kr", "secret123");
   await attack("학생이 같은 반 친구 글 읽기", () => getDoc(doc(db, "writings/wA2")));
   await attack("학생: 내 자기번호 해시 읽기", () => getDoc(doc(db, "pinAuth/A1_01")));
+  await attack("학생: 우리 반 가림 명단(친구 실명) 읽기", () => getDoc(doc(db, "classMaskNames/A1")));
+  await attack("학생: 가림 명단 지우기", () => deleteDoc(doc(db, "classMaskNames/A1")));
   await attack("학생: 틀린 횟수 0으로 되돌리기", () => updateDoc(doc(db, "pinAuth/A1_01"), { fails: 0, lockedUntil: null }));
   await attack("학생이 다른 반 명단 읽기", () => getDoc(doc(db, "classes/B1")));
   await attack("학생이 다른 반 명단 고치기", () => updateDoc(doc(db, "classes/B1"), { students: [] }));

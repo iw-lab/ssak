@@ -40,6 +40,7 @@ import { GRADE_LEVELS, MAX_STUDENTS_PER_CLASS } from "../config/auth";
 import TeacherReview, { ProcessSummary } from "../components/TeacherReview";
 import { InsightsPanel, GrowthReport, AnthologyBuilder } from "../components/TeacherInsights";
 import LivePanel from "../components/LivePanel";
+import MaskRosterBox from "../components/MaskRosterBox";
 import { PeerQueue, PeerShareToggle } from "../components/PeerNotes";
 import { CRITERIA, GENRES } from "../config/writingOptions";
 import {
@@ -3267,6 +3268,8 @@ export default function TeacherDashboard({ user, userData }) {
                 닫기
               </button>
             </div>
+
+            <MaskRosterBox key={selectedClass.classCode} classCode={selectedClass.classCode} />
 
             <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
               <h3 className="font-semibold text-indigo-900">자기번호로 들어오기</h3>

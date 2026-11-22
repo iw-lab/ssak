@@ -3,7 +3,7 @@
 //   은 기본으로 가리고, 흔한 낱말과 같은 이름은 사람에게만 붙는 조사·호칭·부르는 말로 잡는다(2026-11-22 사용자 «100% 수준으로 올려»).
 //   분석기 모델이 약 110MB·메모리 1GB 라 브라우저에서는 못 돈다 — 미리보기도 서버(maskPreview)가 가린 글을 받아 보여 준다.
 //   분석기를 못 올리면 가린 척하지 않고 던진다(fail closed) — 덜 가린 글이 국외로 나가는 것보다 첨삭이 멈추는 쪽이 낫다.
-import { maskPII, MASK, looksLikeName } from "./pii.mjs";
+import { maskPII, MASK, looksLikeName, SURNAMES } from "./pii.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -317,12 +317,46 @@ function regexSpans(out, spans, ctxNames) {
     if (w && !w[0].includes(MASK)) { const core = w[0].replace(/(으로|로|인데|이다|이야|야|입니다|이에요|예요|이고|고|라고|이라고|은|는|이|가|을|를)$/, "") || w[0]; if (!/^(뭐|무엇|있|없|바꾸|알려|만들|짓|정하|부르|불리|까먹|잊)/.test(core)) spans.push([st, st + core.length, "IDCUE", core]); }
   }
 }
+/** 반 명단(담임이 넣은 이름)에서 가릴 낱말을 만든다 — «김서연» → 김서연·서연. 2글자는 그대로(성+외자인지 이름만인지 모른다). */
+export function rosterTerms(names) {
+  const out = new Set();
+  for (const raw of Array.isArray(names) ? names : []) {
+    const n = String(raw ?? "").normalize("NFC").replace(/\s/g, "");
+    if (!/^[가-힣]{2,5}$/.test(n)) continue;
+    out.add(n);
+    // 3글자부터는 «성+이름»으로 보고 이름만 쓴 꼴도 넣는다 — 성씨 표에 없는 성(피·빈·탄…)도 같게. 남궁민수 → 민수(«궁민수»가 아니다)
+    const two = n.length >= 4 && SURNAMES2.includes(n.slice(0, 2));
+    if (n.length >= 3) out.add(n.slice(two ? 2 : 1));
+  }
+  return [...out].sort((a, b) => b.length - a.length);
+}
+const SURNAMES2 = ["남궁", "황보", "제갈", "선우", "서문", "독고", "사공"];
+const NAME_TAIL = "(?:이)?(?:가|는|은|을|를|야|아|랑|와|과|도|만|의|네|님|씨|쌤|형|누나|언니|오빠|한테|에게|께|께서|처럼|보다|부터|까지|조차|마저|밖에|뿐|잖아|구나|이나|나|라도|든|더러|같이|한테서|에게서|하고|고|다|라고|라서|라는|란|면|니까|지만|인데|ㄴ데|였다|었다|에요|예요|입니다|이)?(?:는|은|도|만|서|다|요)?(?![가-힣])";
+/** 명단 낱말을 가린다. 3글자 이상(성+이름)은 붙여 쓴 글 속에서도, 2글자는 어절 첫머리에서 조사가 붙은 꼴만(«유리창»의 유리는 둔다) + 붙여 쓴 긴 덩어리 안. */
+export function maskRoster(text, terms, log = []) {
+  terms = (Array.isArray(terms) ? terms : []).filter((t) => typeof t === "string" && /^[가-힣]{2,5}$/.test(t)); // 한글만 — 정규식에 그대로 넣는다
+  if (!terms.length) return text;
+  const long = terms.filter((t) => t.length >= 3), short = terms.filter((t) => t.length === 2);
+  if (long.length) text = text.replace(new RegExp(long.join("|"), "g"), (m) => { log.push(`ROSTERNAME:${m}`); return MASK; });
+  if (short.length) {
+    text = text.replace(new RegExp(`(?<![가-힣])(?:${short.join("|")})(?=${NAME_TAIL})`, "g"), (m) => { log.push(`ROSTERNAME:${m}`); return MASK; });
+    // 띄어쓰기 없이 길게 붙여 쓴 덩어리(한글 5자 이상 — «나랑서연이»)는 어절 경계가 없다 — 그 안에서는 어디에 있든 가린다.
+    // 실측(깨끗한 글 500편 × 25명 명단 4벌): 가린 어절 2.81% → 3.14%. «민수네집»처럼 짧은 것은 «네» 꼴로 따로
+    text = text.replace(new RegExp(`(?<![가-힣])(?:${short.join("|")})(?=(?:이)?네[가-힣])`, "g"), (m) => { log.push(`ROSTERNAME:${m}`); return MASK; });
+    const any = new RegExp(short.join("|"), "g");
+    text = text.replace(/[가-힣]{5,}/g, (run) => run.replace(any, (m) => { log.push(`ROSTERNAME:${m}`); return MASK; }));
+  }
+  return text;
+}
 /** 규칙(pii.mjs) → 숫자 꼴 → 분석 층. { text, hits, names, log, rulesOnly } — pii.mjs 의 maskPII 와 같은 모양에 log 를 더했다. */
 export async function maskDeep(text, opts = {}) {
   const kiwi = await loadKiwi();
   // 학생이 더 고른 낱말(extraWords)은 맨 끝에만 쓴다 — 미리보기(서버가 가린 글 위에 화면이 덧가림)와 글자 하나까지 같게.
-  text = String(text ?? "").replace(/[‐‑‒–—―−﹣－]/g, "-").replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  // 풀어 쓴 한글(NFD)·글자 사이 보이지 않는 문자는 «같은 이름인데 다른 글자열»을 만든다 — 먼저 한 꼴로 모은다
+  text = String(text ?? "").normalize("NFC").replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "").replace(/[‐‑‒–—―−﹣－]/g, "-").replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
   const pre = [];
+  const roster = rosterTerms(opts.rosterNames);
+  text = maskRoster(text, roster, pre); // 반 명단 이름은 맨 먼저 — 분석기가 «하늘»을 보통 낱말로 보기 전에
   text = text.replace(NUM_RULES[0][0], (m) => { pre.push(`PHONEMIX:${m}`); return MASK; }); // 규칙층이 번호 앞부분만 먹기 전에 전화번호 전체를
   text = text.replace(/\S{300,}/g, (m) => { pre.push(`LONGRUN:${m.length}자`); return MASK; }); // 300자 넘게 안 띄운 덩어리는 글이 아니다 — 분석기를 오래 붙잡는다
   const base = maskPII(text, { ...opts, extraWords: [] });

@@ -368,6 +368,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 가림용 반 명단(반 아이 이름) — 함수(setMaskNames·getMaskNames·가림)만 다룬다. 학생·다른 교사·관리자 화면 모두 직접 못 읽는다
+    match /classMaskNames/{classCode} {
+      allow read, write: if false;
+    }
+
     // 3-2 친구 글 칭찬·질문 — 가린 사본·남긴 말 모두 함수(peerShare·peerSend·peerDecide…)만 다룬다(글쓴이·보낸이 칸 보호)
     match /peerShares/{docId} {
       allow read, write: if false;
