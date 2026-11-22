@@ -1,5 +1,6 @@
 // 배포본 실측 — 가림 2층이 실서버에서 도는지(2026-11-22).
-//   node scripts/live-mask-check.mjs functions/test-data/pii-heldout13.json [--analyze 3]
+//   node scripts/live-mask-check.mjs functions/test-data/pii-heldout13.json [--analyze 3] [--roster]
+//   --roster: 세트 속 한글 이름(2~4자)을 임시 반의 «가림 명단»으로 넣고 잰다(반 명단 가림 실측). 끝나면 지운다.
 // 하는 일: 임시 학생 계정 1개를 만들고 → 실서버 maskPreview 를 불러 세트 전체를 가려 보고(새는 조각·로컬 결과와 같은지·걸린 시간)
 //          → (--analyze N) 실제 첨삭 N편을 불러 답에 개인정보 조각이 없는지 본 뒤 → 임시 계정·문서를 지운다.
 // 인증: firebase CLI 로그인(배포에 쓰는 그 로그인)의 토큰. 열쇠를 파일·화면에 남기지 않는다.
@@ -13,6 +14,7 @@ const require = createRequire(import.meta.url);
 const P = "isw-writing", REGION = "asia-northeast3", DB = "seoul";
 const args = process.argv.slice(2);
 const setFile = args.find((a) => a.endsWith(".json"));
+const useRoster = args.includes("--roster");
 const nAnalyze = args.includes("--analyze") ? Number(args[args.indexOf("--analyze") + 1] || 3) : 0;
 if (!setFile) { console.error("세트 파일이 필요하다"); process.exit(2); }
 const env = Object.fromEntries(readFileSync(new URL("../.env", import.meta.url), "utf8").split("\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]));
@@ -45,6 +47,16 @@ try {
   ok(anon.status === 401, `로그인 없는 미리보기 거절 (${anon.status})`);
 
   const set = JSON.parse(readFileSync(setFile, "utf8"));
+  const roster = useRoster ? [...new Set(set.flatMap((x) => x.pii).filter((p) => /^[가-힣]{2,4}$/.test(p)))] : [];
+  if (useRoster) {
+    const w = await j(`${fsBase}/classMaskNames/${CLASS}`, { method: "PATCH", headers: adminH, body: JSON.stringify({ fields: { classCode: { stringValue: CLASS }, teacherId: { stringValue: "livemask" }, names: { arrayValue: { values: roster.map((n) => ({ stringValue: n })) } } } }) });
+    made.push(`classMaskNames/${CLASS}`);
+    ok(w.ok, `임시 반 명단 ${roster.length}명 넣음 (${w.status})`);
+    const direct = await j(`${fsBase}/classMaskNames/${CLASS}`, { headers: userH });
+    ok(direct.status === 403, `학생이 반 명단 문서를 직접 읽기 → 거절 (${direct.status})`);
+    const viaFn = await call("getMaskNames", { classCode: CLASS });
+    ok(!viaFn.ok, `학생이 함수로 반 명단 읽기 → 거절 (${viaFn.status})`);
+  }
   let pieces = 0, leaked = 0, leakDocs = 0, differ = 0, calls = 0, limited = 0; const times = []; const leaks = [];
   for (let i = 0; i < set.length; i += 4) {
     const chunk = set.slice(i, i + 4);
@@ -56,12 +68,12 @@ try {
     for (let k = 0; k < chunk.length; k++) {
       const miss = chunk[k].pii.filter((p) => out[k].includes(p));
       pieces += chunk[k].pii.length; leaked += miss.length; if (miss.length) { leakDocs++; leaks.push(`[${miss.join(",")}] ${out[k].slice(0, 80)}`); }
-      if (out[k] !== (await maskDeep(chunk[k].text)).text) differ++;
+      if (out[k] !== (await maskDeep(chunk[k].text, { rosterNames: roster })).text) differ++;
     }
     await new Promise((s) => setTimeout(s, 2600)); // 분당 20번 제한 아래로
   }
   times.sort((a, b) => a - b);
-  console.log(`실서버 미리보기: 글 ${set.length}편 · 조각 ${pieces}개 중 막음 ${pieces - leaked} (${((100 * (pieces - leaked)) / pieces).toFixed(1)}%) · 샌 글 ${leakDocs}편 · 호출 ${calls}번(제한에 걸림 ${limited}번) · 첫 호출 ${times.at(-1) === times[0] ? times[0] : "최대 " + times.at(-1)}ms · 가운데 ${times[times.length >> 1]}ms`);
+  console.log(`실서버 미리보기${useRoster ? "(반 명단 " + roster.length + "명)" : ""}: 글 ${set.length}편 · 조각 ${pieces}개 중 막음 ${pieces - leaked} (${((100 * (pieces - leaked)) / pieces).toFixed(1)}%) · 샌 글 ${leakDocs}편 · 호출 ${calls}번(제한에 걸림 ${limited}번) · 첫 호출 ${times.at(-1) === times[0] ? times[0] : "최대 " + times.at(-1)}ms · 가운데 ${times[times.length >> 1]}ms`);
   for (const l of leaks.slice(0, 10)) console.log("  샘:", l);
   ok(differ === 0, `실서버 결과 = 이 저장소 코드 결과 (다른 글 ${differ}편)`);
   console.log(`실서버에서 샌 조각 ${leaked}개`);
