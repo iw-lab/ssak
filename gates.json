@@ -48,7 +48,8 @@
    "mode": "block",
    "match": "process\\.exit\\(bad",
    "cost_s": "60",
-   "note": "학생 일괄 생성 실제 함수 시험 — 아이디가 교사 메일 도메인·이름을 빌리지 않음, 짧은 아이디 로그인, 번호 겹침 없음(scripts/test-student-accounts.mjs)"
+   "note": "학생 일괄 생성 실제 함수 시험 — 아이디가 교사 메일 도메인·이름을 빌리지 않음, 짧은 아이디 로그인, 번호 겹침 없음(scripts/test-student-accounts.mjs)",
+   "site": "관문: student-account-minimal"
   },
   {
    "id": "ai-guard",
@@ -57,7 +58,8 @@
    "mode": "block",
    "match": "process\\.exit\\(bad",
    "cost_s": "60",
-   "note": "AI 문지기 — 미승인·학급 없는 계정 차단, 사람/학급/전체 하루 한도, 동시 호출로 못 넘김(scripts/test-ai-guard.mjs, 가짜 Anthropic 으로 실제 호출 수 셈)"
+   "note": "AI 문지기 — 미승인·학급 없는 계정 차단, 사람/학급/전체 하루 한도, 동시 호출로 못 넘김(scripts/test-ai-guard.mjs, 가짜 Anthropic 으로 실제 호출 수 셈)",
+   "site": "관문: ai-guard"
   },
   {
    "id": "pin-login",
@@ -66,7 +68,18 @@
    "mode": "block",
    "match": "process\\.exit\\(bad",
    "cost_s": "60",
-   "note": "자기번호 로그인 — 맞으면 그 학생, 5번 틀리면 잠금·10번 하드잠금, 동시 시도로 횟수 못 샘, 남의 반 교사·학생은 발급 불가, 반에서 빠진 학생 거절(scripts/test-pin-login.mjs)"
+   "note": "자기번호 로그인 — 맞으면 그 학생, 5번 틀리면 잠금·10번 하드잠금, 동시 시도로 횟수 못 샘, 남의 반 교사·학생은 발급 불가, 반에서 빠진 학생 거절(scripts/test-pin-login.mjs)",
+   "site": "관문: pin-login"
+  },
+  {
+   "id": "pii-deep-floor",
+   "stage": "check",
+   "class": "pii-leak",
+   "mode": "block",
+   "match": "❌ (LEAK|pii-heldout)",
+   "site": "관문: pii-deep-floor",
+   "cost_s": "40",
+   "note": "가림 2층(형태소 분석) — 블라인드 세트별 막음 바닥·깨끗한 글 가림 상한. 2층이 빠지면 55~80%로 떨어져 빨강"
   }
  ]
 }

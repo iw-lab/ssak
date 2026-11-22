@@ -110,4 +110,4 @@ ok(big === "ok", `global 1e20 은 무시하고 기본값(5000) — 무한이 아
 console.log(bad ? `\n${bad}개 실패` : "\n모두 통과");
 for (const x of [P1, L1, A1, A2, B3, T, C4]) await deleteApp(x.app);
 stub.close();
-process.exit(bad ? 1 : 0);
+process.exit(bad ? 1 : 0); // 관문: ai-guard

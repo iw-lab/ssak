@@ -40,3 +40,6 @@ ui-debug.log
 # 에뮬레이터용 비밀(시험 값)
 .secret.local
 .redesign-live-ok
+
+# 가림 2층 형태소 분석기 모델(약 110MB) — node scripts/fetch-kiwi-model.mjs 로 받는다
+functions/kiwi-model/

@@ -133,4 +133,4 @@ ok(junk === "functions/invalid-argument", `숫자 4자리가 아니면 거절 ($
 
 console.log(bad ? `\n${bad}개 실패` : "\n모두 통과");
 await deleteApp(app);
-process.exit(bad ? 1 : 0);
+process.exit(bad ? 1 : 0); // 관문: pin-login

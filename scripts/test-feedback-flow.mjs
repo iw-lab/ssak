@@ -15,6 +15,7 @@ import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/
 import { getFirestore, connectFirestoreEmulator, doc, setDoc } from "firebase/firestore";
 
 let aiHits = 0;
+let lastBody = "";
 let mode = "good";
 const good = {
   scores: { content: 18, topic: 8, structure: 14, vocabulary: 13, grammar: 11, creativity: 6 },
@@ -33,6 +34,7 @@ const stub = http.createServer((req, res) => {
   req.on("data", (c) => (body += c));
   req.on("end", () => {
     aiHits++;
+    lastBody = body;
     const text = mode === "good" ? JSON.stringify(good) : "죄송해요 지금은 JSON 을 못 드려요";
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ id: "m", type: "message", role: "assistant", model: "stub", stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text }] }));
@@ -98,6 +100,19 @@ await setDoc(doc(fdb, "writings/w3"), { studentId: u.uid, classCode: "AAAAAA", t
 const w2 = await waitRank((me) => me && me.submissionCount === 2);
 const expect = 10 + 10 + Math.max(0, Math.min(20, r5.score - r1.score)) + (r5.score >= 70 ? 5 : 0);
 ok(w2.me?.rewriteCount === 1 && w2.me?.effortScore === expect, `고쳐쓰기 → 서버가 앞 글에서 나아진 점수를 읽음(클라가 보낸 previousScore 0 은 무시) (${w2.me?.effortScore}/${expect})`);
+
+// 가림 2층 — 규칙만으로는 새던 별명·가게·이름이 AI 로 나가지 않고, 미리보기에 보인 글이 그대로 나간다(2026-11-22)
+mode = "good";
+const piiText = "어제 학원 끝나고 탱구랑 무지개분식에서 떡볶이를 먹었다. 탱구는 솔메마을에 사는데 나보다 줄넘기를 훨씬 잘한다. 나는 열번을 넘었고 탱구는 쉰 번을 넘었다. 다음에는 빈우 형도 같이 가기로 했다. 정말 기뻤다.";
+const pv = (await httpsCallable(fns, "maskPreview")({ texts: [piiText] })).data.texts[0];
+ok(!/탱구|무지개분식|솔메|빈우/.test(pv) && pv.includes("ㅇㅇㅇ") && pv.includes("떡볶이"), `미리보기가 2층까지 가림 («${pv.slice(0, 40)}…»)`);
+const hitsBeforePii = aiHits;
+await analyze({ ...base, text: piiText });
+const sent = JSON.parse(lastBody).messages.map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content))).join("\n");
+ok(aiHits === hitsBeforePii + 1 && !/탱구|무지개분식|솔메|빈우/.test(lastBody), "AI 로 나간 요청에 별명·가게·마을·이름 없음");
+ok(sent.includes(pv), "미리보기에 보인 글 = AI 로 나간 글");
+const extra = (await httpsCallable(fns, "maskPreview")({ texts: [""] }).catch((e) => e.code));
+ok(typeof extra === "string" || extra?.data, "빈 글 미리보기는 죽지 않음");
 
 console.log(bad ? `\n${bad}개 실패` : "\n모두 통과");
 stub.close();

@@ -40,10 +40,24 @@ const AI_MODEL = defineString("AI_MODEL", { default: "claude-haiku-5-5" });
 const piiModule = import("./pii.mjs");
 const STUDENT_EMAIL_DOMAIN = "isw-writing.web.app"; // 학생 로그인 아이디용(메일 서버 없음). src/config/studentId.js 와 같아야 한다
 const MAX_AI_TEXT = 12000; // 아이 글은 보통 3천 자 이하 — 아주 긴 입력(숫자 수만 자 등)으로 가림 정규식을 오래 붙잡지 못하게
+// 🔒 가림 2층(pii-deep.mjs, 2026-11-22): 규칙만으로는 처음 보는 꼴의 이름·상호가 샜다(블라인드 55%).
+//   형태소 분석기가 «아는 보통 낱말»로 풀지 못한 것은 기본으로 가린다. 분석기를 못 올리면 던진다 — 덜 가린 글은 나가지 않는다.
+//   분석기가 메모리 약 1GB 를 쓴다 → 이 함수를 부르는 함수는 MASK_FN(2GiB)로 띄운다.
+const piiDeepModule = import("./pii-deep.mjs");
+const MASK_FN = { memory: "2GiB", cpu: 1 };
+// 학생이 더 고른 낱말 — 글자 낱말만, 20자·40개까지(긴 목록으로 가림을 붙잡지 못하게)
+function cleanMaskWords(words) {
+  return (Array.isArray(words) ? words : []).filter((w) => typeof w === "string" && w.trim().length >= 1 && w.length <= 20).slice(0, 40);
+}
 async function maskForAI(text, extraWords) {
   if (String(text || "").length > MAX_AI_TEXT) throw new HttpsError("invalid-argument", `글이 너무 길어요(${MAX_AI_TEXT.toLocaleString()}자까지).`);
-  const { maskPII } = await piiModule;
-  return maskPII(String(text || ""), { extraWords: Array.isArray(extraWords) ? extraWords : [] });
+  const { maskDeep } = await piiDeepModule;
+  try {
+    return await maskDeep(String(text || ""), { extraWords: cleanMaskWords(extraWords) });
+  } catch (e) {
+    console.error("[가림 2층 실패 — 전송 막음]", e.message);
+    throw new HttpsError("unavailable", "개인정보 가림 준비가 안 됐어요. 조금 뒤에 다시 해 주세요.");
+  }
 }
 
 // Anthropic 이 미성년 사용자 제품에 요구하는 아동 안전 안내(지원 문서 «Guidelines for Organizations Serving Minors»)
@@ -1448,7 +1462,7 @@ async function signAnalysis(uid, result, len) {
 }
 
 exports.analyzeWriting = onCall(
-  { secrets: [anthropicApiKey] },
+  { secrets: [anthropicApiKey], ...MASK_FN },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1600,7 +1614,7 @@ exports.analyzeWriting = onCall(
 
 // Detect plagiarism
 exports.detectPlagiarism = onCall(
-  { secrets: [anthropicApiKey] },
+  { secrets: [anthropicApiKey], ...MASK_FN },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1871,7 +1885,7 @@ function calculateAiDetectionScore(text) {
 }
 
 // Detect AI usage - GPTZero/Turnitin 기법 기반 강화 버전
-exports.detectAIUsage = onCall({ secrets: [anthropicApiKey] }, async (request) => {
+exports.detectAIUsage = onCall({ secrets: [anthropicApiKey], ...MASK_FN }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
@@ -2019,7 +2033,7 @@ const HELP_CACHE_TTL = 600000; // 10분
 
 // Get writing help - 🚀 최적화: 토큰 40% 절감 + 캐싱
 exports.getWritingHelp = onCall(
-  { secrets: [anthropicApiKey] },
+  { secrets: [anthropicApiKey], ...MASK_FN },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -2104,7 +2118,7 @@ JSON:{"expandIdeas":["구체적아이디어1","2","3"],"detailSuggestions":[{"pa
 
 // Get quick advice - 🚀 최적화: 토큰 50% 절감
 exports.getQuickAdvice = onCall(
-  { secrets: [anthropicApiKey] },
+  { secrets: [anthropicApiKey], ...MASK_FN },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -4013,7 +4027,24 @@ async function studentMe(request) {
   return me;
 }
 
-exports.peerShare = onCall(async (request) => {
+// 🔒 «AI 선생님에게 이렇게 보내요» 미리보기 — 서버가 실제로 보낼 때와 같은 가림(규칙 + 분석 층)을 그대로 돌려준다.
+//   분석 층은 서버에서만 돈다(모델 110MB) — 화면이 따로 가리면 «보여 준 것»과 «보낸 것»이 달라진다.
+//   AI 를 부르지 않는다(0원). 로그인한 사람만, 글은 MAX_AI_TEXT 까지.
+const previewHits = new Map(); // uid → [분 시작, 횟수] — 인스턴스 안 속도 제한(AI 0원이지만 CPU·메모리를 쓴다)
+exports.maskPreview = onCall({ ...MASK_FN, maxInstances: 10 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  const minute = Math.floor(Date.now() / 60000), hit = previewHits.get(request.auth.uid);
+  if (hit && hit[0] === minute && hit[1] >= 20) throw new HttpsError("resource-exhausted", "잠깐만요, 너무 자주 눌렀어요. 조금 뒤에 다시 해 주세요.");
+  previewHits.set(request.auth.uid, hit && hit[0] === minute ? [minute, hit[1] + 1] : [minute, 1]);
+  if (previewHits.size > 5000) previewHits.clear();
+  const { texts, maskWords } = request.data || {};
+  if (!Array.isArray(texts) || texts.length < 1 || texts.length > 4) throw new HttpsError("invalid-argument", "글이 필요합니다.");
+  const out = [];
+  for (const t of texts) out.push((await maskForAI(t == null ? "" : t, maskWords)).text);
+  return { texts: out };
+});
+
+exports.peerShare = onCall({ ...MASK_FN }, async (request) => {
   const { writingId, on } = request.data || {};
   if (!PEER.isId(writingId)) throw new HttpsError("invalid-argument", "글이 필요합니다.");
   const w = (await db.doc(`writings/${writingId}`).get()).data();

@@ -15,6 +15,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.9.0",
     "firebase-admin": "^14.5.1",
-    "firebase-functions": "^7.4.0"
+    "firebase-functions": "^7.4.0",
+    "kiwi-nlp": "0.25.0"
   }
 }

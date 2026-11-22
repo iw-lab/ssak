@@ -85,4 +85,4 @@ try { await batch({ classCode: "AB3K9Z", count: 1.5, gradeLevel: "elementary_3_4
 ok(frac !== "통과됨", `소수 인원(1.5) 거절 (${frac})`);
 
 console.log(bad ? `\n${bad}개 실패` : "\n모두 통과");
-process.exit(bad ? 1 : 0);
+process.exit(bad ? 1 : 0); // 관문: student-account-minimal

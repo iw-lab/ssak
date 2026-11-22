@@ -133,7 +133,7 @@ if (ex.text.includes("똘이")) { fail++; console.log(`❌ extraWords «${ex.tex
 // 다른 AI(Llama)가 쓴 가짜 일기·편지 3묶음(test-data) — 학년·반·선생님·도시 이름은 개인정보가 아니다
 import { readFileSync, readdirSync } from "fs";
 const NOT_PII = /^(선생님|\d학년|\d반|전주|서울|부산)$/;
-for (const f of readdirSync(new URL("./test-data/", import.meta.url)).filter((x) => x.startsWith("pii-"))) {
+for (const f of readdirSync(new URL("./test-data/", import.meta.url)).filter((x) => /^pii-heldout[1-8]?\.json$/.test(x)) /* 9번부터는 2층(test-pii-deep.mjs) 몫 — 규칙만으로는 55~82% */) {
   for (const { text, pii } of JSON.parse(readFileSync(new URL(`./test-data/${f}`, import.meta.url), "utf8"))) {
     const out = maskPII(text).text;
     for (const p of pii) {
